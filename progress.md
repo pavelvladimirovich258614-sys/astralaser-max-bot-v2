@@ -4,11 +4,11 @@
 
 ## Current Verified State
 
-**Статус проекта:** F02 implemented → awaiting human verification
-**Текущая фича `in_progress`:** F02 — Транспорт MAX API (max_client.py)
-**Следующая фича по дорожной карте:** F03 — Webhook + точка входа (FastAPI)
+**Статус проекта:** F03 implemented → awaiting human verification
+**Текущая фича `in_progress`:** F03 — Webhook + точка входа (FastAPI)
+**Следующая фича по дорожной карте:** F04 — Главное меню + политика конфиденциальности
 **Последний коммит:** `<awaiting human commit>`
-**Тесты:** 26 passed
+**Тесты:** 28 passed
 
 ---
 
@@ -232,6 +232,59 @@ $ .\init.ps1
 - Главное меню текст и фото
 - Контакты менеджера, ID админов, ссылки
 - Знания о MAX API (`Authorization` header, формат attachments)
+
+---
+
+## Session Record — 2026-05-06 23:55
+
+**Agent:** Kimi K2.6
+**Feature:** F03 — Webhook + точка входа (FastAPI)
+**Status:** implemented → awaiting human verification
+
+### What was done
+
+- `feature_list.json`: F03 переведена в `in_progress`
+- `src/bot/webhook.py`: FastAPI router с `POST /webhook` (200 OK + background task) и `GET /health`
+- `src/main.py`: FastAPI app с lifespan (подписка webhook при старте), подключён webhook router
+- `tests/test_webhook.py`: 2 теста (health endpoint, webhook POST)
+
+### Evidence
+
+```
+$ python -m pytest -v
+============================= 28 passed in 5.76s ==============================
+
+$ python -m ruff check .
+(no output, exit 0)
+
+$ python -m mypy src/
+Success: no issues found in 19 source files
+
+$ .\init.ps1
+=== HARNESS INIT (Astralaser v2) ===
+...
+=== READY ===
+```
+
+### Live test in MAX
+
+- N/A (F03 — инфраструктура endpoint'ов, UI тестирование не требуется)
+
+### Notes / follow-ups
+
+- `TestClient` выдаёт DeprecationWarning от httpx (app shortcut) — не критично, внешняя зависимость
+- `process_update` — stub, будет реализован в F05+ при добавлении handlers
+
+### Next best action
+
+- Человек переводит F03 в `completed` в `feature_list.json` и делает финальный коммит
+- Затем открываем F04 — Главное меню + политика конфиденциальности
+
+### Commit
+
+```
+<awaiting human commit>
+```
 
 ---
 

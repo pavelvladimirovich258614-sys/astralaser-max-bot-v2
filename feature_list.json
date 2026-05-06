@@ -53,7 +53,9 @@
     {
       "id": "F03",
       "name": "Webhook + точка входа (FastAPI)",
-      "status": "todo",
+      "status": "completed",
+      "completed_at": "2026-05-06",
+      "evidence": "pytest: 28 passed, ruff: exit 0, mypy: clean, init.ps1: READY",
       "depends_on": ["F02"],
       "acceptance_criteria": [
         "FastAPI app в src/main.py",
