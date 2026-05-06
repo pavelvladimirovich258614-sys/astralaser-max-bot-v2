@@ -4,11 +4,11 @@
 
 ## Current Verified State
 
-**Статус проекта:** F01 implemented → awaiting human verification
-**Текущая фича `in_progress`:** F01 — БД, модели, миграции, seed
-**Следующая фича по дорожной карте:** F02 — Транспорт MAX API (max_client.py)
+**Статус проекта:** F02 implemented → awaiting human verification
+**Текущая фича `in_progress`:** F02 — Транспорт MAX API (max_client.py)
+**Следующая фича по дорожной карте:** F03 — Webhook + точка входа (FastAPI)
 **Последний коммит:** `<awaiting human commit>`
-**Тесты:** 18 passed
+**Тесты:** 26 passed
 
 ---
 
@@ -136,6 +136,69 @@ $ .\init.ps1
 
 - Человек переводит F01 в `completed` в `feature_list.json` и делает финальный коммит
 - Затем открываем F02 — Транспорт MAX API (max_client.py)
+
+### Commit
+
+```
+<awaiting human commit>
+```
+
+---
+
+## Session Record — 2026-05-06 23:45
+
+**Agent:** Kimi K2.6
+**Feature:** F02 — Транспорт MAX API (max_client.py)
+**Status:** implemented → awaiting human verification
+
+### What was done
+
+- `feature_list.json`: F02 переведена в `in_progress`
+- `src/bot/max_client.py`: MAXClient с Authorization header, поддержкой DI (http_client)
+  - `send_message`, `edit_message`, `delete_message`, `answer_callback_query`
+  - `subscribe_webhook`, `unsubscribe_webhook`, `get_chat_member`
+  - Graceful 4xx: логирует warning, не убивает процесс
+- `tests/test_max_client.py`: 8 тестов на `httpx.MockTransport`
+  - Authorization header в запросе
+  - send_message payload (text + image + inline_keyboard)
+  - send_message при 4xx → {} + warning log
+  - edit_message → PATCH /messages/{id}
+  - delete_message → DELETE /messages/{id}
+  - answer_callback_query → POST /answers
+  - subscribe_webhook → POST /subscriptions
+  - get_chat_member при 404 → None
+
+### Evidence
+
+```
+$ python -m pytest -v
+============================= 26 passed in 0.87s ==============================
+
+$ python -m ruff check .
+(no output, exit 0)
+
+$ python -m mypy src/
+Success: no issues found in 17 source files
+
+$ .\init.ps1
+=== HARNESS INIT (Astralaser v2) ===
+...
+=== READY ===
+```
+
+### Live test in MAX
+
+- N/A (F02 — транспортный слой, UI тестирование не требуется)
+
+### Notes / follow-ups
+
+- `r.json()` обёрнут в `cast(dict[str, Any], ...)` для совместимости с strict mypy
+- В `__init__` при переданном `http_client` заголовок `Authorization` всё равно устанавливается (DI-friendly)
+
+### Next best action
+
+- Человек переводит F02 в `completed` в `feature_list.json` и делает финальный коммит
+- Затем открываем F03 — Webhook + точка входа (FastAPI)
 
 ### Commit
 

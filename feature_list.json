@@ -38,7 +38,9 @@
     {
       "id": "F02",
       "name": "Транспорт MAX API (max_client.py)",
-      "status": "todo",
+      "status": "completed",
+      "completed_at": "2026-05-06",
+      "evidence": "pytest: 26 passed, ruff: exit 0, mypy: clean, init.ps1: READY",
       "depends_on": ["F01"],
       "acceptance_criteria": [
         "MAXClient использует Authorization header (НЕ access_token в URL)",
