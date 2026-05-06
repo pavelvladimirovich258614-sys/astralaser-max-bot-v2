@@ -1,0 +1,192 @@
+{
+  "_comment": "Реестр фич проекта astralaser-max-bot v2.0. Источник истины №2. Изменяется только человеком после verification.",
+  "_version": "2.0",
+  "_rule": "Только одна фича может быть in_progress одновременно. Фича становится completed только после прохождения всех 8 пунктов DoD из AGENTS.md.",
+  "features": [
+    {
+      "id": "F00",
+      "name": "Инфраструктура и harness",
+      "status": "todo",
+      "depends_on": [],
+      "acceptance_criteria": [
+        "Структура проекта создана по docs/TZ.md раздел 2.4",
+        "pyproject.toml + requirements.txt с зависимостями",
+        ".gitignore исключает venv, .env, __pycache__, *.db",
+        ".env.example на месте",
+        "AGENTS.md, CLAUDE.md, feature_list.json, progress.md в корне",
+        "init.ps1 и init.sh запускают pytest+ruff+mypy",
+        "git init + первый коммит, push на GitHub"
+      ]
+    },
+    {
+      "id": "F01",
+      "name": "БД, модели, миграции, seed",
+      "status": "todo",
+      "depends_on": ["F00"],
+      "acceptance_criteria": [
+        "Все 8 моделей созданы по docs/TZ.md раздел 3.F01",
+        "Alembic init + initial migration",
+        "scripts/seed_db.py читает data/seed_products.json и идемпотентно создаёт 3 категории, 4 товара, 22 фото",
+        "Повторный запуск seed_db.py: new_products=0",
+        "Тесты test_models.py и test_crud.py зелёные"
+      ]
+    },
+    {
+      "id": "F02",
+      "name": "Транспорт MAX API (max_client.py)",
+      "status": "todo",
+      "depends_on": ["F01"],
+      "acceptance_criteria": [
+        "MAXClient использует Authorization header (НЕ access_token в URL)",
+        "send_message, edit_message, delete_message, answer_callback_query реализованы",
+        "subscribe_webhook, unsubscribe_webhook, get_chat_member реализованы",
+        "Все 4xx/5xx ошибки логируются как warning, не убивают процесс",
+        "Тесты test_max_client.py с MockTransport — все методы покрыты"
+      ]
+    },
+    {
+      "id": "F03",
+      "name": "Webhook + точка входа (FastAPI)",
+      "status": "todo",
+      "depends_on": ["F02"],
+      "acceptance_criteria": [
+        "FastAPI app в src/main.py",
+        "POST /webhook принимает update, отвечает 200 OK мгновенно",
+        "Обработка update в фоне через BackgroundTasks",
+        "On startup автоматически вызывает subscribe_webhook",
+        "GET /health возвращает {status:ok}",
+        "Тесты test_webhook.py с TestClient проходят",
+        "Локально работает через ngrok/pinggy: MAX доставляет update"
+      ]
+    },
+    {
+      "id": "F04",
+      "name": "Главное меню + политика конфиденциальности",
+      "status": "todo",
+      "depends_on": ["F03"],
+      "acceptance_criteria": [
+        "/start показывает политику если consent_at IS NULL",
+        "Кнопка [✅ Принимаю] записывает consent_at и показывает главное меню",
+        "Кнопка [❌ Отклонить] показывает сообщение об отказе",
+        "Главное меню: фото + caption (без URL в тексте) + reply-клавиатура с 5 кнопками",
+        "Повторный /start после согласия сразу показывает меню",
+        "Тесты test_handlers.py покрывают оба сценария"
+      ]
+    },
+    {
+      "id": "F05",
+      "name": "Каталог: категории, карточки, пагинация фото",
+      "status": "todo",
+      "depends_on": ["F04"],
+      "acceptance_criteria": [
+        "[📚 Каталог] показывает 3 категории inline кнопками",
+        "Клик по категории открывает список товаров (или сразу карточку, если 1 товар)",
+        "Карточка товара: фото + caption + кнопки [◀️ N/M ▶️] [🛒 В корзину] [🔙 К категории] [🏠 Главная]",
+        "Пагинация фото листает циклически через edit_message",
+        "Все экраны используют edit_message (одно сообщение, не свалка)",
+        "Кнопка [🛒 В корзину] добавляет в БД и показывает уведомление",
+        "Тесты test_handlers.py + test_router.py покрывают все callback patterns"
+      ]
+    },
+    {
+      "id": "F06",
+      "name": "Корзина",
+      "status": "todo",
+      "depends_on": ["F05"],
+      "acceptance_criteria": [
+        "[🛒 Корзина] показывает товары через edit_message",
+        "Каждый товар: название, цена × кол-во = сумма, кнопки [➖] [➕] [❌]",
+        "Внизу: итог, [✅ Оформить заказ], [🗑 Очистить], [🏠 Главная]",
+        "Пустая корзина: текст + [📚 К каталогу] [🏠 Главная]",
+        "Все callback'ы (qty:inc, qty:dec, rm, clear) работают через edit_message",
+        "Тесты test_cart.py покрывают все сценарии"
+      ]
+    },
+    {
+      "id": "F07",
+      "name": "Оформление заказа (FSM)",
+      "status": "todo",
+      "depends_on": ["F06"],
+      "acceptance_criteria": [
+        "FSM реализован через UserState (persistent в БД)",
+        "4 шага: name → phone → address → notes",
+        "Валидация имени, телефона, адреса по docs/TZ.md",
+        "Кнопка [❌ Отмена] на каждом шаге очищает state и возвращает в корзину",
+        "При success: создаётся Order + OrderItems со snapshot цен и названий",
+        "Корзина очищается после успешного заказа",
+        "Оба админа из MAX_ADMIN_USER_IDS получают уведомление",
+        "Клиент получает подтверждение с ID заказа",
+        "Тесты test_order.py покрывают полный FSM-флоу"
+      ]
+    },
+    {
+      "id": "F08",
+      "name": "Менеджер и помощь",
+      "status": "todo",
+      "depends_on": ["F07"],
+      "acceptance_criteria": [
+        "/contact и [💬 Менеджер] показывают: телефон, VK, MAX-ссылку (если задана), часы работы",
+        "Inline кнопки: [📱 Позвонить] [🌐 VK] [💬 MAX] [🏠 Главная]",
+        "/help и [❓ Помощь] показывают список команд и инструкцию по заказу",
+        "Тесты test_handlers.py покрывают /contact и /help"
+      ]
+    },
+    {
+      "id": "F09",
+      "name": "Проверка подписки на канал",
+      "status": "todo",
+      "depends_on": ["F08"],
+      "acceptance_criteria": [
+        "Если MAX_REQUIRED_CHANNEL пуст — gate отключён, FSM запускается сразу",
+        "Если задан — перед FSM проверяется get_chat_member",
+        "Если не подписан — показывается экран с [📢 Перейти] [✅ Я подписался] [🔙 Назад]",
+        "Кнопка [✅ Я подписался] делает повторную проверку",
+        "Тесты test_subscription.py покрывают: пустой config, подписан, не подписан, повторная проверка"
+      ]
+    },
+    {
+      "id": "F10",
+      "name": "Админ-панель",
+      "status": "todo",
+      "depends_on": ["F09"],
+      "acceptance_criteria": [
+        "/admin доступен только пользователям из MAX_ADMIN_USER_IDS",
+        "Подменю: 📦 Заказы, 📚 Товары, 🏷 Категории, 📊 Статистика, 📤 Рассылка",
+        "Управление товарами: добавить, редактировать, удалить, скрыть (is_active)",
+        "Добавление товара через FSM: категория → название → цена → описание → фото URL → превью → сохранить",
+        "Управление заказами: список со статусами, изменение статуса (pending/confirmed/completed/cancelled)",
+        "Простая рассылка по всем User",
+        "Обычный пользователь /admin видит «команда не найдена»",
+        "Тесты test_admin.py покрывают доступ и базовые сценарии"
+      ]
+    },
+    {
+      "id": "F11",
+      "name": "Healthcheck + логирование",
+      "status": "todo",
+      "depends_on": ["F10"],
+      "acceptance_criteria": [
+        "GET /health возвращает {status, db, max_api, uptime}",
+        "Структурированное логирование с уровнем из LOG_LEVEL",
+        "Все логи содержат timestamp, level, module, message",
+        "Тесты test_health.py покрывают /health"
+      ]
+    },
+    {
+      "id": "F12",
+      "name": "Деплой (production)",
+      "status": "todo",
+      "depends_on": ["F11"],
+      "acceptance_criteria": [
+        "Сервер настроен (Ubuntu + Python 3.11 + nginx + certbot + postgresql)",
+        "Бот развернут в /opt/astralaser-max-bot",
+        "PostgreSQL настроена и доступна по DATABASE_URL",
+        "nginx reverse proxy на 127.0.0.1:8000 + SSL от Let's Encrypt",
+        "systemd unit astralaser-bot.service запущен и в автозагрузке",
+        "Webhook зарегистрирован, MAX доставляет updates",
+        "Бот живёт после systemctl restart",
+        "ufw настроен (22, 80, 443)"
+      ]
+    }
+  ]
+}
