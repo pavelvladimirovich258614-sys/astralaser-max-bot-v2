@@ -23,7 +23,9 @@
     {
       "id": "F01",
       "name": "БД, модели, миграции, seed",
-      "status": "todo",
+      "status": "completed",
+      "completed_at": "2026-05-06",
+      "evidence": "pytest: 18 passed, ruff: exit 0, mypy: clean, init.ps1: READY, seed: idempotent (4 products, 3 categories, 22 photos)",
       "depends_on": ["F00"],
       "acceptance_criteria": [
         "Все 8 моделей созданы по docs/TZ.md раздел 3.F01",

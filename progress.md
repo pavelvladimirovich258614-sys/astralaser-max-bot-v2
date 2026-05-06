@@ -4,11 +4,11 @@
 
 ## Current Verified State
 
-**Статус проекта:** F00 implemented → awaiting human verification
-**Текущая фича `in_progress`:** F00 — Инфраструктура и harness
-**Следующая фича по дорожной карте:** F01 — БД, модели, миграции, seed
+**Статус проекта:** F01 implemented → awaiting human verification
+**Текущая фича `in_progress`:** F01 — БД, модели, миграции, seed
+**Следующая фича по дорожной карте:** F02 — Транспорт MAX API (max_client.py)
 **Последний коммит:** `<awaiting human commit>`
-**Тесты:** 2 passed
+**Тесты:** 18 passed
 
 ---
 
@@ -70,6 +70,72 @@ Success: no issues found in 7 source files
 
 - Человек переводит F00 в `completed` в `feature_list.json` и делает финальный коммит
 - Затем открываем F01 — БД, модели, миграции, seed
+
+### Commit
+
+```
+<awaiting human commit>
+```
+
+---
+
+## Session Record — 2026-05-06 23:30
+
+**Agent:** Kimi K2.6
+**Feature:** F01 — БД, модели, миграции, seed
+**Status:** implemented → awaiting human verification
+
+### What was done
+
+- `feature_list.json`: F01 переведена в `in_progress`
+- `src/db/engine.py`: async engine + session maker + `get_session()`
+- `src/db/models.py`: 8 моделей SQLAlchemy 2.x (User, Category, Product, ProductPhoto, CartItem, Order, OrderItem, UserState)
+- `alembic/`: инициализация, `env.py` настроен для async, initial миграция создана и применена
+- `src/db/crud/`: 7 модулей (user, category, product, product_photo, cart, order, user_state) с типизированными async функциями
+- `scripts/seed_db.py`: идемпотентный seed из `data/seed_products.json` (4 товара, 3 категории, 22 фото)
+- `tests/test_models.py`: 5 тестов (таблицы, колонки, cascade, unique constraint, UserState)
+- `tests/test_crud.py`: 11 тестов (user, category, product, cart, order, user_state CRUD)
+
+### Evidence
+
+```
+$ python -m alembic upgrade head
+INFO  [alembic.runtime.migration] Running upgrade  -> e5db72bd462f, initial schema
+
+$ python scripts/seed_db.py
+Seed complete: new_products_total=4
+
+$ python scripts/seed_db.py
+Seed complete: new_products_total=0
+
+$ python -m pytest -v
+============================= 18 passed in 0.82s ==============================
+
+$ python -m ruff check .
+(no output, exit 0)
+
+$ python -m mypy src/
+Success: no issues found in 16 source files
+
+$ .\init.ps1
+=== HARNESS INIT (Astralaser v2) ===
+...
+=== READY ===
+```
+
+### Live test in MAX
+
+- N/A (F01 — БД и модели, UI тестирование не требуется)
+
+### Notes / follow-ups
+
+- В `tests/test_crud.py` использованы алиасы импортов (`get_order_by_id`, `get_product_by_id`) для избежания конфликта имён между CRUD-модулями
+- `Category.is_active` и `Product.is_active` используют `.is_(True)` вместо `== True` для совместимости с ruff E712
+
+### Next best action
+
+- Человек переводит F01 в `completed` в `feature_list.json` и делает финальный коммит
+- Затем открываем F02 — Транспорт MAX API (max_client.py)
 
 ### Commit
 
