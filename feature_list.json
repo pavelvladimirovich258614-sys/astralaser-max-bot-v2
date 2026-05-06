@@ -70,8 +70,9 @@
     {
       "id": "F04",
       "name": "Главное меню + политика конфиденциальности",
-      "status": "in_progress",
-      "depends_on": ["F03"],
+      "status": "completed",
+      "completed_at": "2026-05-07",
+      "evidence": "pytest: 33 passed, ruff: exit 0, mypy: clean, init.ps1: READY",
       "acceptance_criteria": [
         "/start показывает политику если consent_at IS NULL",
         "Кнопка [✅ Принимаю] записывает consent_at и показывает главное меню",
