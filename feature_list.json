@@ -6,7 +6,9 @@
     {
       "id": "F00",
       "name": "Инфраструктура и harness",
-      "status": "todo",
+      "status": "completed",
+      "completed_at": "2026-05-06",
+      "evidence": "pytest: 2 passed, ruff: exit 0, mypy: clean, init.ps1: READY",
       "depends_on": [],
       "acceptance_criteria": [
         "Структура проекта создана по docs/TZ.md раздел 2.4",
