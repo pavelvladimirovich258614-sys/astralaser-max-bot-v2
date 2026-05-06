@@ -70,7 +70,7 @@
     {
       "id": "F04",
       "name": "Главное меню + политика конфиденциальности",
-      "status": "todo",
+      "status": "in_progress",
       "depends_on": ["F03"],
       "acceptance_criteria": [
         "/start показывает политику если consent_at IS NULL",

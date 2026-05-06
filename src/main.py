@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import FastAPI
 
 from src.bot.max_client import MAXClient
+from src.bot.router import UpdateRouter
 from src.bot.webhook import router as webhook_router
 from src.bot.webhook import set_update_processor
 from src.config import get_settings
@@ -18,27 +19,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+_router: UpdateRouter | None = None
+
 
 async def process_update(payload: dict[str, Any]) -> None:
-    """Обработчик update. В F05+ будет роутить в handlers."""
-    logger.info("processing update: type=%s", payload.get("update_type"))
+    if _router is not None:
+        await _router.process(payload)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    global _router
     settings = get_settings()
+
+    client = MAXClient()
+    _router = UpdateRouter(client)
     set_update_processor(process_update)
 
     if settings.webhook_url:
-        async with MAXClient() as client:
-            ok = await client.subscribe_webhook(settings.webhook_url)
-            if ok:
-                logger.info("Webhook subscribed at %s", settings.webhook_url)
-            else:
-                logger.warning("Failed to subscribe webhook")
+        ok = await client.subscribe_webhook(settings.webhook_url)
+        if ok:
+            logger.info("Webhook subscribed at %s", settings.webhook_url)
+        else:
+            logger.warning("Failed to subscribe webhook")
 
     yield
 
+    await client.close()
     logger.info("Shutting down...")
 
 

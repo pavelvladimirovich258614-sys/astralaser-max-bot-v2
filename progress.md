@@ -4,11 +4,11 @@
 
 ## Current Verified State
 
-**Статус проекта:** F03 implemented → awaiting human verification
-**Текущая фича `in_progress`:** F03 — Webhook + точка входа (FastAPI)
-**Следующая фича по дорожной карте:** F04 — Главное меню + политика конфиденциальности
+**Статус проекта:** F04 implemented → awaiting human verification
+**Текущая фича `in_progress`:** F04 — Главное меню + политика конфиденциальности
+**Следующая фича по дорожной карте:** F05 — Каталог: категории, карточки, пагинация фото
 **Последний коммит:** `<awaiting human commit>`
-**Тесты:** 28 passed
+**Тесты:** 33 passed
 
 ---
 
@@ -279,6 +279,67 @@ $ .\init.ps1
 
 - Человек переводит F03 в `completed` в `feature_list.json` и делает финальный коммит
 - Затем открываем F04 — Главное меню + политика конфиденциальности
+
+### Commit
+
+```
+<awaiting human commit>
+```
+
+---
+
+## Session Record — 2026-05-07 00:15
+
+**Agent:** Kimi K2.6
+**Feature:** F04 — Главное меню + политика конфиденциальности
+**Status:** implemented → awaiting human verification
+
+### What was done
+
+- `feature_list.json`: F04 переведена в `in_progress`
+- `src/bot/router.py`: UpdateRouter с маршрутизацией message_created / message_callback
+- `src/bot/keyboards.py`: consent_keyboard() и main_menu_reply_keyboard()
+- `src/services/user_service.py`: get_or_create_user, has_given_consent, record_consent
+- `src/bot/handlers/start.py`: handle_start, handle_consent_accept, handle_consent_decline
+- `src/main.py`: подключён UpdateRouter в lifespan
+- `tests/test_handlers.py`: 5 тестов с RecordingClient
+  - `/start` новый пользователь → политика
+  - `/start` с consent_at → главное меню
+  - `consent:accept` → запись в БД + edit_message с меню
+  - `consent:decline` → edit_message с DECLINE_TEXT
+  - Главное меню caption НЕ содержит URL
+
+### Evidence
+
+```
+$ python -m pytest -v
+============================= 33 passed in 6.46s ==============================
+
+$ python -m ruff check .
+(no output, exit 0)
+
+$ python -m mypy src/
+Success: no issues found in 23 source files
+
+$ .\init.ps1
+=== HARNESS INIT (Astralaser v2) ===
+...
+=== READY ===
+```
+
+### Live test in MAX
+
+- N/A (F04 — UI логика, требует ngrok + MAX для live теста)
+
+### Notes / follow-ups
+
+- В `tests/test_handlers.py` использован monkeypatch `async_session_maker` для интеграции с in-memory SQLite
+- `RecordingClient` — мок MAXClient для изоляции handler-тестов от сети
+
+### Next best action
+
+- Человек переводит F04 в `completed` в `feature_list.json` и делает финальный коммит
+- Затем открываем F05 — Каталог: категории, карточки, пагинация фото
 
 ### Commit
 
