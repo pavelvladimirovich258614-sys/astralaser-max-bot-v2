@@ -61,6 +61,7 @@ class ProductPhoto(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
     url: Mapped[str] = mapped_column(String(512), nullable=False)
+    max_photo_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
     sort_order: Mapped[int] = mapped_column(default=0)
 
     product: Mapped["Product"] = relationship(back_populates="photos")

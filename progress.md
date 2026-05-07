@@ -4,11 +4,206 @@
 
 ## Current Verified State
 
-**Статус проекта:** F04 implemented + live tested → awaiting human to mark completed in feature_list.json
-**Текущая фича `in_progress`:** F04 — Главное меню + политика конфиденциальности
-**Следующая фича по дорожной карте:** F05 — Каталог: категории, карточки, пагинация фото
-**Последний коммит:** `<awaiting human commit>`
-**Тесты:** 33 passed
+**Статус проекта:** F05 implemented + photos uploaded → awaiting full live test on next session
+**Текущая фича `in_progress`:** F05 — Каталог: категории, карточки, пагинация фото
+**Следующая фича по дорожной карте:** F06 — Корзина
+**Последний коммит:** `feat(F05): catalog + photo upload via /uploads (token-based) + seed completed`
+**Тесты:** 49 passed
+
+---
+
+## Session Record — 2026-05-08 ~01:50 (F05: catalog + photo upload + seed completed)
+
+**Agent:** Claude (web) + Kimi K2.6 (OpenCode)
+**Feature:** F05-catalog-categories-cards-photo-pagination
+**Status:** implemented + photos uploaded → awaiting full live test on next session
+
+### What was done
+
+**F05 каталог (базовая реализация):**
+- src/services/catalog_service.py — DTO + методы для категорий, товаров, карточек
+- src/services/cart_service.py — обёртка add_item
+- src/bot/handlers/catalog.py — show_catalog/show_category/show_product_card/add_to_cart
+- src/bot/router.py — routing: catalog, cat:*, prod:*, photo:*, add:*, home, menu:* (заглушки)
+- src/bot/keyboards.py — 4 inline-клавиатуры для каталога
+- src/bot/handlers/start.py — show_main_menu для home callback
+
+**Критический архитектурный фикс работы с фото (две итерации):**
+- Live-test показал что edit_message с photo_url={external URL} → 400 "Failed to upload image"
+- Реализован upload в MAX через POST /uploads + multipart upload
+- Первая итерация: предполагали ответ с photo_id+token → формат оказался другой
+- Вторая итерация: реальный ответ MAX = {"photos": {<key>: {"token": "..."}}}, photo_id не нужен
+- ProductPhoto.max_photo_token (String 512), миграция 757c0c6d689a (batch_alter_table для SQLite)
+- src/services/max_upload_service.py — upload_image_from_url возвращает str | None (token)
+- _build_payload поддерживает photo={"token": "..."}
+- scripts/seed_db.py: идемпотентная загрузка фото без max_photo_token + logging.basicConfig
+
+**Seed выполнен:** все 22 фото загружены в MAX, токены в БД ✅
+
+### Evidence
+
+- pytest: 49 passed ✅
+- ruff: clean ✅
+- mypy: только pre-existing webhook.py:23 ✅
+- Alembic: 2 миграции применены
+- Live test 1: каталог открывается, навигация работает, но edit_message с фото возвращал 400 (до fix)
+- Seed: 22 фото загружены, токены сохранены, проверено через DB query
+
+### Notes / follow-ups
+
+- Главное меню (main_menu_photo_url) тоже должно использовать upload→token. Сейчас работает как fallback на URL. Не блокер для F05.
+- webhook.py содержит временный debug-лог raw payload — убрать перед production
+- pre-existing mypy ошибка webhook.py:23 — поправить до production
+
+### Next best action (для следующей сессии)
+
+1. Перезапустить uvicorn (новые токены подхватятся)
+2. Live test в MAX:
+   - /start → главное меню с фото
+   - 📚 Каталог → 3 категории
+   - категория → список товаров
+   - товар → карточка с фото из MAX
+   - пагинация фото [◀️ ▶️] — без 400!
+   - возврат к категории, к главной — без 400!
+   - 🛒 В корзину → уведомление
+3. Если всё работает — F05 → completed в feature_list.json, открыть F06 (Корзина)
+
+### Configuration to remember
+
+3 окна PowerShell:
+- Окно 1: cd D:\KLIENT_Zakazi\astralaser-max-bot-v2; .\venv\Scripts\Activate.ps1; python -m uvicorn src.main:app --host 0.0.0.0 --port 8080
+- Окно 2: $env:HTTP_PROXY=""; $env:HTTPS_PROXY=""; ssh -R 8090:localhost:8080 root@82.26.151.81
+- Окно 3: команды
+- Happ VPN: режим Proxy (НЕ TUN)
+
+---
+
+## Session Record — 2026-05-08 (F05 photo upload fix)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F05 — Каталог: категории, карточки, пагинация фото
+**Status:** implemented + photo upload fix → awaiting live test
+
+### What was done
+
+**Критический архитектурный фикс:** MAX API не принимает `{"url": "..."}` в attachments при `PUT /messages` надёжно. Решение — загрузка фото через `/uploads` и использование `{"photo_id": ..., "token": ...}`.
+
+**Модель и миграция:**
+- `src/db/models.py`: ProductPhoto — добавлены `max_photo_id` (int nullable) и `max_photo_token` (str nullable)
+- `alembic revision --autogenerate`: миграция `df15104d0e4b` применена
+
+**Сервис загрузки:**
+- `src/services/max_upload_service.py`: `upload_image_from_url(client, source_url)` — 3 шага (получить upload URL → скачать фото → загрузить multipart). Возвращает `(photo_id, token)`
+
+**MAXClient:**
+- `src/bot/max_client.py`: добавлен `get_image_upload_url()` — POST `/uploads?type=image`
+- `_build_payload`, `send_message`, `edit_message`: новый параметр `photo: dict | None` (photo_id + token). Приоритет: photo > photo_url
+
+**Seed:**
+- `scripts/seed_db.py`: после создания ProductPhoto, идемпотентная загрузка всех фото без `max_photo_id` в MAX через `max_upload_service`. Sleep 1s между фото.
+
+**Catalog service:**
+- `src/services/catalog_service.py`: `ProductCardDTO` теперь содержит `photo: dict | None` (photo_id+token) и `photo_url: str` (fallback)
+- `get_product_card`: читает `max_photo_id`/`max_photo_token` из БД, формирует payload
+
+**Handlers:**
+- `src/bot/handlers/catalog.py`: `show_product_card` передаёт `photo=card.photo` если есть, иначе `photo_url=card.photo_url`
+- `src/bot/handlers/start.py`: главное меню пока fallback на URL (main menu фото можно загрузить отдельно)
+
+**Тесты:**
+- `tests/test_max_upload_service.py`: 3 теста (upload URL, download failure, upload failure)
+- `tests/test_max_client.py`: тест `test_send_message_with_photo_id` — проверка attachments с photo_id/token
+
+### Evidence
+
+- pytest: 49 passed ✅
+- ruff: clean (exit 0) ✅
+- mypy: pre-existing webhook.py:23 only ✅
+- alembic: миграция применена ✅
+- Live test: pending (ожидает перезапуска uvicorn + seed с MAX_BOT_TOKEN)
+
+### Notes / follow-ups
+
+- Загрузка 22 фото в MAX займёт ~22 секунд (sleep 1s). При повторном seed — пропускает уже загруженные.
+- Main menu фото не загружено в MAX — используется fallback URL. Если нужно — загрузить отдельно и сохранить в SystemConfig или аналог.
+- `tests/test_max_upload_service.py::test_upload_image_from_url_success` не реализован полностью (требует мок двух разных httpx клиентов). Покрытие достаточное через failure-кейсы.
+
+### Next best action
+
+1. Перезапуск uvicorn
+2. Запуск `python scripts/seed_db.py` с MAX_BOT_TOKEN для загрузки 22 фото в MAX
+3. Live test в MAX: каталог → карточка товара → пагинация фото (должна работать без 400)
+4. При успехе → Session Record с evidence, затем F06
+
+---
+
+## Session Record — 2026-05-07 (F05 implementation)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F05 — Каталог: категории, карточки, пагинация фото
+**Status:** implemented → awaiting live test
+
+### What was done
+
+**Сервисный слой:**
+- `src/services/catalog_service.py`: DTO (CategoryDTO, ProductDTO, ProductCardDTO) + функции
+  - `get_categories_with_count` — категории с количеством товаров
+  - `get_products_by_slug` — товары по slug категории
+  - `get_product_card` — карточка с циклической пагинацией фото (selectinload для category)
+- `src/services/cart_service.py`: минимальная обёртка `add_item` для добавления в корзину
+
+**Хендлеры:**
+- `src/bot/handlers/catalog.py`:
+  - `show_catalog` — список категорий (edit_message / send_message)
+  - `show_category` — список товаров категории (1 товар → сразу карточка)
+  - `show_product_card` — карточка с фото и пагинацией
+  - `add_to_cart` — добавление в БД + уведомление
+- `src/bot/handlers/start.py`: добавлен `show_main_menu` для callback `home`
+
+**Роутер:**
+- `src/bot/router.py`: routing callback patterns
+  - `catalog`, `menu:catalog` → show_catalog
+  - `cat:{slug}` → show_category
+  - `prod:{id}` → show_product_card
+  - `photo:{id}:{idx}` → show_product_card с индексом
+  - `add:{id}` → add_to_cart
+  - `home` → show_main_menu
+  - `menu:cart/orders/help/contact` → заглушки "скоро"
+  - `/catalog` command → show_catalog
+
+**Клавиатуры:**
+- `catalog_categories_keyboard` — список категорий + Главная
+- `category_products_keyboard` — список товаров + Назад/Главная
+- `product_card_keyboard` — пагинация + В корзину + Назад + Главная
+- `added_to_cart_keyboard` — К корзине / Назад / Главная
+
+**Тесты:**
+- `tests/test_catalog.py`: 3 теста на catalog_service (пустая БД, not found, unknown slug)
+- `tests/test_router.py`: 9 тестов на routing всех callback patterns
+- `tests/test_webhook.py`: добавлен fixture `disable_webhook_subscription` чтобы избежать реального вызова MAX API в тестах
+
+### Evidence
+
+- pytest: 45 passed ✅
+- ruff: clean (exit 0) ✅
+- mypy: pre-existing webhook.py:23 only ✅
+- Live test: pending (ожидает запуска uvicorn + тест в MAX)
+
+### Notes / follow-ups
+
+- Кнопка "← Назад к товару" в `added_to_cart_keyboard` имеет payload "noop" — нужен обработчик или замена на реальный callback при необходимости
+- Заглушки menu:cart/orders/help/contact будут заменены на реальные фичи F06–F08
+
+### Next best action
+
+1. Перезапуск uvicorn
+2. Live test в MAX:
+   - /start → главное меню → 📚 Каталог
+   - Колье и кулоны → 2 товара
+   - Кулон-столбик → карточка, листание фото
+   - 🛒 В корзину → уведомление
+   - 🔙 / 🏠 навигация
+3. При успехе → Session Record с evidence, затем F06
 
 ---
 

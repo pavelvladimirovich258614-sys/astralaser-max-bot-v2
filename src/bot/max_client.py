@@ -62,9 +62,12 @@ class MAXClient:
         text: str,
         reply_markup: list[list[dict[str, Any]]] | None,
         photo_url: str | None,
+        photo: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         attachments: list[dict[str, Any]] = []
-        if photo_url:
+        if photo:
+            attachments.append({"type": "image", "payload": photo})
+        elif photo_url:
             attachments.append({"type": "image", "payload": {"url": photo_url}})
         if reply_markup:
             attachments.append(self._build_inline_keyboard(reply_markup))
@@ -82,12 +85,13 @@ class MAXClient:
         text: str,
         reply_markup: list[list[dict[str, Any]]] | None = None,
         photo_url: str | None = None,
+        photo: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         try:
             r = await self._client.post(
                 "/messages",
                 params={"chat_id": chat_id},
-                json=self._build_payload(text, reply_markup, photo_url),
+                json=self._build_payload(text, reply_markup, photo_url, photo),
             )
             r.raise_for_status()
             return cast(dict[str, Any], r.json())
@@ -102,12 +106,13 @@ class MAXClient:
         text: str,
         reply_markup: list[list[dict[str, Any]]] | None = None,
         photo_url: str | None = None,
+        photo: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         try:
             r = await self._client.put(
                 "/messages",
                 params={"message_id": message_id},
-                json=self._build_payload(text, reply_markup, photo_url),
+                json=self._build_payload(text, reply_markup, photo_url, photo),
             )
             r.raise_for_status()
             return cast(dict[str, Any], r.json())
@@ -177,4 +182,14 @@ class MAXClient:
             r.raise_for_status()
             return cast(dict[str, Any], r.json())
         except httpx.HTTPStatusError:
+            return None
+
+    async def get_image_upload_url(self) -> str | None:
+        try:
+            r = await self._client.post("/uploads", params={"type": "image"})
+            r.raise_for_status()
+            data = cast(dict[str, Any], r.json())
+            return data.get("url")
+        except httpx.HTTPStatusError as e:
+            logger.warning("get_image_upload_url failed: status=%s body=%s", e.response.status_code, e.response.text)
             return None

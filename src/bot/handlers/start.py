@@ -46,6 +46,7 @@ async def handle_start(client: MAXClient, chat_id: int | str, user_id: int | str
     if not has_consent:
         await client.send_message(chat_id, PRIVACY_TEXT, reply_markup=consent_keyboard())
     else:
+        # Main menu photo fallback на URL (отдельная загрузка в MAX может быть добавлена позже)
         await client.send_message(
             chat_id,
             MAIN_MENU_TEXT,
@@ -68,3 +69,22 @@ async def handle_consent_accept(
         reply_markup=main_menu_inline_keyboard(),
         photo_url=MAIN_MENU_PHOTO,
     )
+
+
+async def show_main_menu(client: MAXClient, chat_id: int | str, message_id: str | None = None) -> None:
+    """Показать главное меню. edit_message если message_id, иначе send_message."""
+    if message_id:
+        await client.edit_message(
+            chat_id,
+            message_id,
+            MAIN_MENU_TEXT,
+            reply_markup=main_menu_inline_keyboard(),
+            photo_url=MAIN_MENU_PHOTO,
+        )
+    else:
+        await client.send_message(
+            chat_id,
+            MAIN_MENU_TEXT,
+            reply_markup=main_menu_inline_keyboard(),
+            photo_url=MAIN_MENU_PHOTO,
+        )

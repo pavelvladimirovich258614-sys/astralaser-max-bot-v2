@@ -1,13 +1,19 @@
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 from sqlalchemy import select
 
+from src.bot.max_client import MAXClient
+from src.config import get_settings
 from src.db.engine import async_session_maker
 from src.db.models import Category, Product, ProductPhoto
+from src.services import max_upload_service
 
 SEED_FILE = Path(__file__).parent.parent / "data" / "seed_products.json"
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 async def seed() -> int:
@@ -65,7 +71,36 @@ async def seed() -> int:
 
         await session.commit()
         print(f"Seed complete: new_products_total={new_products_total}")
+
+        # Загрузка фото в MAX (требует MAX_BOT_TOKEN)
+        settings = get_settings()
+        if settings.max_bot_token:
+            await _upload_photos_to_max()
+        else:
+            logger.warning("MAX_BOT_TOKEN not set, skipping photo upload to MAX")
+
         return new_products_total
+
+
+async def _upload_photos_to_max() -> None:
+    """Идемпотентно загружает фото из БД в MAX API."""
+    client = MAXClient()
+    try:
+        async with async_session_maker() as session:
+            result = await session.execute(select(ProductPhoto).where(ProductPhoto.max_photo_token.is_(None)))
+            photos = list(result.scalars().all())
+
+            for photo in photos:
+                token = await max_upload_service.upload_image_from_url(client, photo.url)
+                if token:
+                    photo.max_photo_token = token
+                    await session.commit()
+                    logger.info("Uploaded photo for product_id=%s", photo.product_id)
+                    await asyncio.sleep(1)
+                else:
+                    logger.warning("Failed to upload photo for product_id=%s: %s", photo.product_id, photo.url)
+    finally:
+        await client.close()
 
 
 if __name__ == "__main__":

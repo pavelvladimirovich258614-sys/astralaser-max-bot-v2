@@ -1,6 +1,13 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
+
+
+@pytest.fixture(autouse=True)
+def disable_webhook_subscription(monkeypatch):
+    """Предотвращает реальный вызов MAX API при запуске lifespan в тестах."""
+    monkeypatch.setenv("WEBHOOK_URL", "")
 
 
 def test_health():

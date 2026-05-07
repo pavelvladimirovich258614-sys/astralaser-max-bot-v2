@@ -63,6 +63,29 @@ async def test_send_message_payload(set_token):
 
 
 @pytest.mark.asyncio
+async def test_send_message_with_photo_token(set_token):
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"message_id": "123"})
+
+    client = MAXClient(http_client=_make_transport(handler))
+    result = await client.send_message(
+        chat_id=42,
+        text="Hello",
+        photo={"token": "abc123"},
+    )
+    await client.close()
+
+    assert result == {"message_id": "123"}
+    attachments = captured["body"]["attachments"]
+    assert len(attachments) == 1
+    assert attachments[0]["type"] == "image"
+    assert attachments[0]["payload"]["token"] == "abc123"
+
+
+@pytest.mark.asyncio
 async def test_send_message_4xx_logs_warning(set_token, caplog):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(400, text="Bad Request")

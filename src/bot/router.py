@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from src.bot.handlers import catalog as catalog_handler
 from src.bot.handlers import start as start_handler
 from src.bot.max_client import MAXClient
 
@@ -38,6 +39,8 @@ class UpdateRouter:
 
         if text.startswith("/start"):
             await start_handler.handle_start(self.client, chat_id, user_id, user)
+        elif text.startswith("/catalog"):
+            await catalog_handler.show_catalog(self.client, chat_id)
 
     async def _handle_callback(self, payload: dict[str, Any]) -> None:
         cb = payload.get("callback", {})
@@ -53,3 +56,60 @@ class UpdateRouter:
 
         if data == "consent:accept":
             await start_handler.handle_consent_accept(self.client, chat_id, user_id, message_id)
+            return
+
+        if data == "catalog" or data == "menu:catalog":
+            await catalog_handler.show_catalog(self.client, chat_id, message_id)
+            return
+
+        if data == "home":
+            await start_handler.show_main_menu(self.client, chat_id, message_id)
+            return
+
+        # Заглушки для не реализованных разделов главного меню
+        if data in ("menu:cart", "menu:orders", "menu:help", "menu:contact"):
+            stub_text = {
+                "menu:cart": "🛒 Корзина — скоро.",
+                "menu:orders": "📦 Мои заказы — скоро.",
+                "menu:help": "❓ Помощь — скоро.",
+                "menu:contact": "💬 Менеджер — скоро.",
+            }.get(data, "Раздел в разработке.")
+            await self.client.edit_message(chat_id, message_id, stub_text)
+            return
+
+        # callback patterns с аргументами
+        parts = data.split(":")
+        if len(parts) < 2:
+            return
+
+        cmd = parts[0]
+
+        if cmd == "cat" and len(parts) == 2:
+            slug = parts[1]
+            await catalog_handler.show_category(self.client, chat_id, message_id, slug)
+            return
+
+        if cmd == "prod" and len(parts) == 2:
+            try:
+                product_id = int(parts[1])
+            except ValueError:
+                return
+            await catalog_handler.show_product_card(self.client, chat_id, message_id, product_id)
+            return
+
+        if cmd == "photo" and len(parts) == 3:
+            try:
+                product_id = int(parts[1])
+                photo_index = int(parts[2])
+            except ValueError:
+                return
+            await catalog_handler.show_product_card(self.client, chat_id, message_id, product_id, photo_index)
+            return
+
+        if cmd == "add" and len(parts) == 2:
+            try:
+                product_id = int(parts[1])
+            except ValueError:
+                return
+            await catalog_handler.add_to_cart(self.client, chat_id, user_id, message_id, product_id)
+            return
