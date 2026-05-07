@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.bot.keyboards import consent_keyboard, main_menu_reply_keyboard
+from src.bot.keyboards import consent_keyboard, main_menu_inline_keyboard
 from src.bot.max_client import MAXClient
 from src.db.engine import async_session_maker
 from src.services import user_service
@@ -31,8 +31,6 @@ MAIN_MENU_TEXT = """🌟 Astralaser — украшения с персональ
 
 MAIN_MENU_PHOTO = "https://i.postimg.cc/vm2rdtGg/IMG-20260505-105827.png"
 
-DECLINE_TEXT = "Без согласия на обработку данных мы не можем продолжить.\nВы всегда можете вернуться, нажав /start."
-
 
 async def handle_start(client: MAXClient, chat_id: int | str, user_id: int | str, user_info: dict[str, Any]) -> None:
     async with async_session_maker() as session:
@@ -51,7 +49,7 @@ async def handle_start(client: MAXClient, chat_id: int | str, user_id: int | str
         await client.send_message(
             chat_id,
             MAIN_MENU_TEXT,
-            reply_markup=main_menu_reply_keyboard(),
+            reply_markup=main_menu_inline_keyboard(),
             photo_url=MAIN_MENU_PHOTO,
         )
 
@@ -67,10 +65,6 @@ async def handle_consent_accept(
         chat_id,
         message_id,
         MAIN_MENU_TEXT,
-        reply_markup=main_menu_reply_keyboard(),
+        reply_markup=main_menu_inline_keyboard(),
         photo_url=MAIN_MENU_PHOTO,
     )
-
-
-async def handle_consent_decline(client: MAXClient, chat_id: int | str, message_id: str) -> None:
-    await client.edit_message(chat_id, message_id, DECLINE_TEXT)

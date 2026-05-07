@@ -24,6 +24,7 @@ async def receive_update(request: Request, background: BackgroundTasks) -> dict[
     """MAX доставляет update сюда. Отвечаем 200 OK мгновенно, обработка — в фоне."""
     payload = await request.json()
     logger.info("webhook received update: %s", payload.get("update_type", "unknown"))
+    logger.info("webhook raw payload: %s", payload)
 
     if _update_processor is not None:
         background.add_task(_update_processor, payload)

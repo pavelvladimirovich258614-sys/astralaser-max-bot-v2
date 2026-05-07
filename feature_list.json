@@ -85,7 +85,7 @@
     {
       "id": "F05",
       "name": "Каталог: категории, карточки, пагинация фото",
-      "status": "todo",
+      "status": "in_progress",
       "depends_on": ["F04"],
       "acceptance_criteria": [
         "[📚 Каталог] показывает 3 категории inline кнопками",

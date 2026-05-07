@@ -90,8 +90,9 @@ async def test_edit_message(set_token):
     await client.close()
 
     assert result == {"message_id": "msg_1"}
-    assert captured["method"] == "PATCH"
-    assert "/messages/msg_1" in captured["url"]
+    assert captured["method"] == "PUT"
+    assert "/messages" in captured["url"]
+    assert "message_id=msg_1" in captured["url"]
 
 
 @pytest.mark.asyncio
@@ -130,6 +131,24 @@ async def test_answer_callback_query(set_token):
     assert captured["method"] == "POST"
     assert "/answers" in captured["url"]
     assert captured["body"]["notification"] == "Done"
+
+
+@pytest.mark.asyncio
+async def test_answer_callback_query_no_payload_skips_request(set_token):
+    """Если notification и message не переданы — запрос не уходит."""
+    request_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        return httpx.Response(200)
+
+    client = MAXClient(http_client=_make_transport(handler))
+    result = await client.answer_callback_query(callback_id="cb_1")
+    await client.close()
+
+    assert result is None
+    assert request_count == 0
 
 
 @pytest.mark.asyncio

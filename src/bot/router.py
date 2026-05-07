@@ -41,18 +41,15 @@ class UpdateRouter:
 
     async def _handle_callback(self, payload: dict[str, Any]) -> None:
         cb = payload.get("callback", {})
+        msg = payload.get("message", {})
         callback_id = cb.get("callback_id")
-        chat_id = cb.get("message", {}).get("recipient", {}).get("chat_id")
-        message_id = cb.get("message", {}).get("body", {}).get("mid")
+        chat_id = msg.get("recipient", {}).get("chat_id")
+        message_id = msg.get("body", {}).get("mid")
         user_id = cb.get("user", {}).get("user_id")
         data = cb.get("payload", "")
 
         if not callback_id or not chat_id or not user_id:
             return
 
-        await self.client.answer_callback_query(callback_id)
-
         if data == "consent:accept":
             await start_handler.handle_consent_accept(self.client, chat_id, user_id, message_id)
-        elif data == "consent:decline":
-            await start_handler.handle_consent_decline(self.client, chat_id, message_id)

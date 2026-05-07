@@ -4,11 +4,81 @@
 
 ## Current Verified State
 
-**Статус проекта:** F04 implemented → awaiting human verification
+**Статус проекта:** F04 implemented + live tested → awaiting human to mark completed in feature_list.json
 **Текущая фича `in_progress`:** F04 — Главное меню + политика конфиденциальности
 **Следующая фича по дорожной карте:** F05 — Каталог: категории, карточки, пагинация фото
 **Последний коммит:** `<awaiting human commit>`
 **Тесты:** 33 passed
+
+---
+
+## Session Record — 2026-05-07 23:21 (F04 live test PASSED)
+
+**Agent:** Claude (web) + Kimi K2.6 (OpenCode)
+**Feature:** F04-privacy-policy-and-main-menu
+**Status:** implemented + live tested → awaiting human to mark completed in feature_list.json
+
+### What was done in this session
+
+**Webhook infrastructure (production-ready):**
+- DNS A-record astralaser.ai-agent-paul.ru → 82.26.151.81 (own VPS, Netherlands)
+- nginx reverse proxy на VPS: listen 82.26.151.81:80/443 ssl, proxy_pass http://127.0.0.1:8090
+- Let's Encrypt SSL через certbot (auto-renew)
+- SSH reverse tunnel: ssh -R 8090:localhost:8080 root@82.26.151.81
+- Уход от cloudflared/Pinggy/ngrok/localtunnel — все они ломались (cloudflared менял URL, Pinggy 60min limit + reset connections, ngrok ERR_NGROK_9040 РФ-блок, localtunnel PATH issue)
+
+**Bug fixes в коде (live-обнаруженные):**
+- src/bot/keyboards.py: callback_data → {"type": "callback", "payload": "..."} (формат MAX API для inline)
+- src/bot/router.py: _handle_callback парсил message изнутри cb, реальная структура — payload.message на верхнем уровне рядом с payload.callback
+- src/bot/router.py: убран бесполезный self.client.answer_callback_query(callback_id) без payload (давал 400)
+- src/bot/max_client.py: edit_message PATCH→PUT, /messages/{mid}→/messages?message_id={mid}, убран chat_id из URL
+- src/bot/max_client.py: answer_callback_query теперь возвращает None если notification и message оба None (избегаем 400 на пустом body)
+- АРХИТЕКТУРНЫЙ ФИКС: MAX API не поддерживает reply-клавиатуру. Все кнопки только inline через attachments. main_menu_reply_keyboard переименована в main_menu_inline_keyboard, кнопки переведены на формат callback. ТЗ обновлён.
+- Удалена кнопка «❌ Отклонить» — по решению заказчика, осталась только «✅ Принимаю»
+
+### Evidence
+
+- pytest: 33 passed ✅
+- ruff: clean (exit 0) ✅
+- mypy: pre-existing webhook.py:23 (Missing type parameters for generic type "Request") — не блокер
+- Live test в MAX:
+  - /start → политика с одной кнопкой «✅ Принимаю» ✅
+  - клик «Принимаю» → consent_at записан в БД, показано главное меню ✅
+  - повторный /start (после consent) → сразу главное меню ✅
+  - главное меню: фото + текст + 5 inline-кнопок (Каталог/Корзина/Мои заказы/Помощь/Менеджер) ✅
+- MAX API лог: POST /subscriptions 200 OK, POST /messages 200 OK, PUT /messages 200 OK, PATCH 404 → fixed
+- Webhook chain: MAX → astralaser.ai-agent-paul.ru:443 → nginx → SSH tunnel :8090 → uvicorn :8080 ✅
+
+### Подводные камни (зафиксировать на будущее)
+
+1. nginx: если на сервере есть другой сайт с listen IP:443 ssl, новый сайт ОБЯЗАТЕЛЬНО должен иметь listen IP:443 ssl (с явным IP), иначе старый перехватывает SNI
+2. Локальный VPN-клиент Happ в режиме TUN перехватывает SSH reverse tunnel и localhost-обращения. Нужно использовать режим Proxy на время разработки.
+3. MAX API не поддерживает reply keyboard вообще — только inline через attachments
+4. answer_callback_query НЕ обязателен — можно вообще его не вызывать (в отличие от Telegram)
+
+### Notes / follow-ups (не входят в F04)
+
+- webhook.py содержит временный debug-лог `logger.info("webhook raw payload: %s", payload)` — убрать перед production (или понизить уровень до DEBUG)
+- mypy: webhook.py:23 — Missing type parameters for generic type "Request". Pre-existing, не блокер. Поправить до production (typing на FastAPI Request)
+- F12 (deploy production): когда придёт время, текущая инфраструктура VPS + nginx + Let's Encrypt полностью переиспользуется. Бот переедет на VPS целиком, SSH-туннель снимается.
+
+### Configuration to remember (for future sessions)
+
+Запуск всей цепочки в 3 окна PowerShell:
+- Окно 1 (uvicorn): `cd D:\KLIENT_Zakazi\astralaser-max-bot-v2; .\venv\Scripts\Activate.ps1; python -m uvicorn src.main:app --host 0.0.0.0 --port 8080`
+- Окно 2 (SSH туннель): `$env:HTTP_PROXY=""; $env:HTTPS_PROXY=""; ssh -R 8090:localhost:8080 root@82.26.151.81`
+- Окно 3 (команды): любые curl/git/тесты
+- Happ VPN: режим Proxy (НЕ TUN) — иначе SSH туннель ломается
+
+### Next best action
+
+1. Человек переводит F04 → completed и F05 → in_progress в feature_list.json
+2. Открыть F05: «Каталог: категории, карточки, пагинация фото» (промпт у заказчика готов)
+
+### Commit (если решишь)
+
+git add -A
+git commit -m "feat(F04): live-tested privacy + inline main menu, MAX API alignment"
 
 ---
 
@@ -350,3 +420,32 @@ $ .\init.ps1
 ---
 
 **Это Progress Log v2.** v1 архивирован в Git history старого репозитория.
+
+## Session Record - 2026-05-07 09:20 (Webhook debugging + Pinggy setup)
+
+**STATUS:**
+- F00 ✅ COMPLETED: инфраструктура, pyproject, pytest, ruff, mypy
+- F01 ✅ COMPLETED: БД модели, миграции, seed (3 категории, 4 товара)  
+- F02 ✅ COMPLETED: MAXClient на httpx с тестами
+- F03 ✅ COMPLETED: FastAPI webhook endpoints
+- F04 ✅ COMPLETED: политика конфиденциальности + главное меню
+- F05 🔄 READY: каталог товаров (следующая фича)
+
+**ПРОБЛЕМЫ РЕШЕНЫ:**
+- ✅ Cloudflared URL рассинхронизация → переход на Pinggy.io
+- ✅ HTTP proxy конфликт → curl --noproxy localhost  
+- ✅ Health endpoint работает: {"status":"ok"}
+- ✅ SSH туннель Pinggy: https://wzmmn-5-167-17-184.run.pinggy-free.link
+
+**ТЕКУЩЕЕ СОСТОЯНИЕ:**
+- uvicorn: localhost:8000 ✅
+- Pinggy туннель: активен (60 мин) ✅
+- Готов к webhook подписке и /start тесту
+
+**СЛЕДУЮЩИЕ ШАГИ:**
+1. Обновить .env с Pinggy URL
+2. Перезапуск uvicorn → webhook subscription
+3. Тест /start в MAX (ожидаем политику + кнопку согласия)
+4. При успехе → переход к F05 каталог
+
+**DoD F04:** ждет live-тест /start для полного завершения

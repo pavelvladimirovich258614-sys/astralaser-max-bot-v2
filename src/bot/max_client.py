@@ -104,9 +104,9 @@ class MAXClient:
         photo_url: str | None = None,
     ) -> dict[str, Any]:
         try:
-            r = await self._client.patch(
-                f"/messages/{message_id}",
-                params={"chat_id": chat_id},
+            r = await self._client.put(
+                "/messages",
+                params={"message_id": message_id},
                 json=self._build_payload(text, reply_markup, photo_url),
             )
             r.raise_for_status()
@@ -127,13 +127,25 @@ class MAXClient:
             logger.warning("delete_message failed: status=%s", e.response.status_code)
             return False
 
-    async def answer_callback_query(self, callback_id: str, notification: str | None = None) -> bool:
+    async def answer_callback_query(
+        self,
+        callback_id: str,
+        notification: str | None = None,
+        message: dict[str, Any] | None = None,
+    ) -> bool | None:
+        body: dict[str, Any] = {}
+        if notification:
+            body["notification"] = notification
+        if message:
+            body["message"] = message
+        if not body:
+            return None
+
         try:
-            payload = {"notification": notification} if notification else {}
             r = await self._client.post(
                 "/answers",
                 params={"callback_id": callback_id},
-                json=payload,
+                json=body,
             )
             r.raise_for_status()
             return True

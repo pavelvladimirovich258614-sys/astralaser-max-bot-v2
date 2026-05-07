@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from src.bot.handlers import start
-from src.bot.keyboards import consent_keyboard, main_menu_reply_keyboard
+from src.bot.keyboards import consent_keyboard, main_menu_inline_keyboard
 from src.db.models import Base
 
 
@@ -35,8 +35,8 @@ class RecordingClient:
         })
         return {}
 
-    async def answer_callback_query(self, callback_id, notification=None):
-        self.calls.append({"method": "answer_callback_query", "callback_id": callback_id})
+    async def answer_callback_query(self, callback_id, notification=None, message=None):
+        self.calls.append({"method": "answer_callback_query", "callback_id": callback_id, "notification": notification, "message": message})
         return True
 
 
@@ -113,7 +113,7 @@ async def test_start_existing_user_with_consent_shows_menu(override_session_make
     call = client.calls[0]
     assert call["method"] == "send_message"
     assert "🌟 Astralaser" in call["text"]
-    assert call["reply_markup"] == main_menu_reply_keyboard()
+    assert call["reply_markup"] == main_menu_inline_keyboard()
     assert call["photo_url"] == start.MAIN_MENU_PHOTO
 
 
@@ -131,21 +131,9 @@ async def test_consent_accept_records_and_shows_menu(override_session_maker):
     call = client.calls[0]
     assert call["method"] == "edit_message"
     assert "🌟 Astralaser" in call["text"]
-    assert call["reply_markup"] == main_menu_reply_keyboard()
+    assert call["reply_markup"] == main_menu_inline_keyboard()
     assert call["photo_url"] == start.MAIN_MENU_PHOTO
 
-
-@pytest.mark.asyncio
-async def test_consent_decline_shows_decline_text(override_session_maker):
-    client = RecordingClient()
-    await start.handle_consent_decline(client, chat_id=1, message_id="msg_1")
-
-    assert len(client.calls) == 1
-    call = client.calls[0]
-    assert call["method"] == "edit_message"
-    assert "Без согласия" in call["text"]
-    assert call["reply_markup"] is None
-    assert call["photo_url"] is None
 
 
 @pytest.mark.asyncio
