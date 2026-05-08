@@ -119,6 +119,62 @@ async def test_edit_message(set_token):
 
 
 @pytest.mark.asyncio
+async def test_edit_message_without_attachments_sends_empty_attachments(set_token):
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"message_id": "msg_1"})
+
+    client = MAXClient(http_client=_make_transport(handler))
+    await client.edit_message(chat_id=42, message_id="msg_1", text="Updated")
+    await client.close()
+
+    assert captured["body"]["text"] == "Updated"
+    assert captured["body"]["attachments"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kwargs", "expected_payload"),
+    [
+        ({"photo_url": "http://example.com/img.jpg"}, {"url": "http://example.com/img.jpg"}),
+        ({"photo": {"token": "abc123"}}, {"token": "abc123"}),
+    ],
+)
+async def test_edit_message_with_image_sends_image_attachment(set_token, kwargs, expected_payload):
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"message_id": "msg_1"})
+
+    client = MAXClient(http_client=_make_transport(handler))
+    await client.edit_message(chat_id=42, message_id="msg_1", text="Updated", **kwargs)
+    await client.close()
+
+    attachments = captured["body"]["attachments"]
+    assert len(attachments) == 1
+    assert attachments[0]["type"] == "image"
+    assert attachments[0]["payload"] == expected_payload
+
+
+@pytest.mark.asyncio
+async def test_send_message_without_attachments_omits_attachments(set_token):
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"message_id": "123"})
+
+    client = MAXClient(http_client=_make_transport(handler))
+    await client.send_message(chat_id=42, text="Hello")
+    await client.close()
+
+    assert captured["body"] == {"text": "Hello"}
+
+
+@pytest.mark.asyncio
 async def test_delete_message(set_token):
     captured: dict[str, Any] = {}
 

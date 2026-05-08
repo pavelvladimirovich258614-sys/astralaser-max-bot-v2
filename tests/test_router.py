@@ -1,8 +1,13 @@
 from typing import Any
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
+from src.bot.handlers import catalog as catalog_handler
 from src.bot.router import UpdateRouter
+from src.db.models import Base
 
 
 class FakeClient:
@@ -11,10 +16,10 @@ class FakeClient:
     def __init__(self):
         self.calls: list[dict[str, Any]] = []
 
-    async def edit_message(self, chat_id, message_id, text, reply_markup=None, photo_url=None):
+    async def edit_message(self, chat_id, message_id, text, reply_markup=None, photo_url=None, photo=None):
         self.calls.append({"method": "edit_message", "chat_id": chat_id, "text": text})
 
-    async def send_message(self, chat_id, text, reply_markup=None, photo_url=None):
+    async def send_message(self, chat_id, text, reply_markup=None, photo_url=None, photo=None):
         self.calls.append({"method": "send_message", "chat_id": chat_id, "text": text})
 
     async def close(self):
@@ -24,6 +29,30 @@ class FakeClient:
 @pytest.fixture(autouse=True)
 def set_token(monkeypatch):
     monkeypatch.setenv("MAX_BOT_TOKEN", "test_token")
+
+
+@pytest.fixture(scope="session")
+def async_engine():
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        poolclass=StaticPool,
+        future=True,
+    )
+    return engine
+
+
+@pytest.fixture(autouse=True)
+async def override_catalog_session_maker(monkeypatch, async_engine):
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(catalog_handler, "async_session_maker", test_session_maker)
+
+    yield
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
 
 
 @pytest.fixture

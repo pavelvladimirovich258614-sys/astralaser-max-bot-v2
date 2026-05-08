@@ -644,3 +644,55 @@ $ .\init.ps1
 4. При успехе → переход к F05 каталог
 
 **DoD F04:** ждет live-тест /start для полного завершения
+
+## Session Record — 2026-05-08 (F05 WIP: контент и навигация починены, ждём финальный live-test)
+
+### Agent
+Codex CLI executor + Claude навигатор.
+
+### Feature
+F05 каталог (категории, карточки, пагинация фото). Статус: in_progress.
+
+### What was done
+- Промпт wipe_product_photos выполнен — таблица product_photos очищена.
+- Промпт resolve_ibb выполнен — 21 короткая ссылка ibb развёрнута в прямые i.ibb.co/...webp.
+- data/seed_products.json обновлён: новые описания, цена 940 ₽ для браслета и брелока, новое имя «Браслет с индивидуальной гравировкой», добавлен «Кожаный брелок с гравировкой», прямые i.ibb.co URL для всех 21 фото.
+- Из всех описаний удалены дублирующие первые две строки (заголовок и цена) — show_product_card сам клеит title и price сверху.
+- scripts/seed_db.py приведён к идемпотентному upsert по category+sort_order, обновляет все поля existing product (title, description, price, cover_url, sort_order, is_active).
+- В scripts/seed_db.py и scripts/wipe_product_photos.py добавлен bootstrap sys.path для запуска из подпапки scripts/.
+- Запущен seed: 21 фото загружено в MAX через POST /uploads, max_photo_token сохранены в БД. Проверка: 21 of 21 with_token, 0 without.
+- src/bot/max_client.py: в _build_payload добавлен параметр force_attachments=False (по умолчанию). edit_message всегда вызывает с force_attachments=True. Теперь edit_message всегда отправляет ключ attachments в JSON, даже пустым массивом — MAX очищает старые attachments при возврате на список товаров и на главное меню. send_message не задет.
+- src/bot/handlers/catalog.py: из show_category убрано авто-открытие карточки для категории из одного товара. Теперь всегда показывается список.
+- Добавлено 4 новых теста: edit_message с пустым attachments, edit_message с photo, send_message без attachments (поведение не изменилось), show_category с одним товаром показывает список.
+- tests/test_router.py починен — больше не ходит в реальную astralaser.db, использует in-memory SQLite.
+- Диагностический logger.info("callback received...") в src/bot/router.py добавлялся для одного промпта на live-test и убран в этом же раунде.
+- Подтверждено через временный scripts/_dump_products.py (удалён): описания в БД синхронизированы с JSON, дубликатов нет.
+
+### Evidence
+- pytest: 54 passed, 2 warnings, 6.37s
+- ruff: exit 0
+- mypy: Success, no issues found in 27 source files
+- DB check: Total photos in DB: 21, With token: 21, Without token: 0
+- Live-test webhook логи (00:48–00:52): пагинация фото работает корректно, callback photo:N:M доходит, MAX отвечает PUT /messages 200 OK, photo_id меняется с каждым нажатием.
+
+### Configuration to remember
+- 3 окна PowerShell: Окно 1 uvicorn (python -m uvicorn src.main:app --host 0.0.0.0 --port 8080), Окно 2 SSH туннель (ssh -R 8090:127.0.0.1:8080 root@82.26.151.81 — НЕ localhost из-за IPv6), Окно 3 свободные команды.
+- Happ VPN строго в режиме Proxy (не TUN).
+- Webhook: nginx на VPS nl-vmnano (82.26.151.81) → astralaser.ai-agent-paul.ru:443 (Let's Encrypt) → MAX.
+- Источник правды по товарам: data/seed_products.json. scripts/seed_db.py читает его и делает идемпотентный upsert.
+- Фото в MAX: attachments=[{type:"image", payload:{token:"..."}}], токены берутся из ProductPhoto.max_photo_token.
+- Inline-клавиатуры: attachments с callback_data={"type":"callback","payload":"..."}.
+- edit_message: PUT /messages?message_id=... без chat_id.
+- answer_callback_query НЕ вызываем — даёт 400 без payload.
+
+### Known cosmetic non-blocker
+Главное меню при возврате через кнопку «🏠 Главная» в MAX иногда рендерит длинный текст столбиком по одной букве из-за длины текста и особенностей рендера MAX. Чинится отдельным промптом сжатием текста главного меню после закрытия F05. НЕ блокер для F05.
+
+### Next best action
+1. Финальный live-test в живом MAX по полному сценарию: /start → главное меню → каталог → категории → карточки → пагинация фото → возврат «🔙 К категории» (чистый список без фото) → возврат «🏠 Главная» (главное меню с фото и 5 кнопками). Прогон для всех 4 товаров.
+2. Если live-test зелёный — отдельный финальный промпт #5 закрывает F05 (feature_list.json: F05 → completed, F06 → in_progress) и делает git commit + git push.
+3. Если live-test красный по какой-то точке — узкий промпт-фикс по конкретному симптому, потом повтор live-test.
+
+### Local commits
+Последние WIP-коммиты лежат локально, push НЕ делался — push будет после зелёного финального live-test.
+

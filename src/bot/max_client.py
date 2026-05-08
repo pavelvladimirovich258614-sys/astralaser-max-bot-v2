@@ -63,6 +63,7 @@ class MAXClient:
         reply_markup: list[list[dict[str, Any]]] | None,
         photo_url: str | None,
         photo: dict[str, Any] | None = None,
+        force_attachments: bool = False,
     ) -> dict[str, Any]:
         attachments: list[dict[str, Any]] = []
         if photo:
@@ -73,7 +74,7 @@ class MAXClient:
             attachments.append(self._build_inline_keyboard(reply_markup))
 
         payload: dict[str, Any] = {"text": text}
-        if attachments:
+        if attachments or force_attachments:
             payload["attachments"] = attachments
         return payload
 
@@ -112,7 +113,7 @@ class MAXClient:
             r = await self._client.put(
                 "/messages",
                 params={"message_id": message_id},
-                json=self._build_payload(text, reply_markup, photo_url, photo),
+                json=self._build_payload(text, reply_markup, photo_url, photo, force_attachments=True),
             )
             r.raise_for_status()
             return cast(dict[str, Any], r.json())

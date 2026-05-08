@@ -24,7 +24,12 @@ async def show_catalog(
     async with async_session_maker() as session:
         categories = await catalog_service.get_categories_with_count(session)
 
-    text = "📚 Выберите категорию:"
+    text = (
+        "💎 Выберите категорию украшений\n\n"
+        "В каждом разделе — актуальные модели с гравировкой.\n"
+        "Можно посмотреть варианты для себя или в подарок.\n\n"
+        "👇 Нажмите на нужную кнопку"
+    )
     keyboard = catalog_categories_keyboard(categories)
 
     if message_id:
@@ -46,11 +51,12 @@ async def show_category(
         )
         return
 
-    if len(products) == 1:
-        await show_product_card(client, chat_id, message_id, products[0].id)
-        return
-
-    text = "📚 Выберите товар:"
+    text = (
+        "✨ Выберите товар из списка\n\n"
+        "Каждое изделие можно сделать с вашей гравировкой.\n"
+        "Нажмите на нужный вариант, чтобы посмотреть детали.\n\n"
+        "🔙 Для возврата используйте кнопку «К категориям»"
+    )
     keyboard = category_products_keyboard(products, slug)
     await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
 
