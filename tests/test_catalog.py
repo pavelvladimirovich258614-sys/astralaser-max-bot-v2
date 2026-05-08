@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 from src.bot.handlers import catalog as catalog_handler
 from src.db.models import Base, Category, Product
 from src.services import catalog_service
+from src.services.catalog_service import ProductCardDTO
 
 
 @pytest.fixture(scope="session")
@@ -105,3 +106,61 @@ async def test_show_category_single_product_shows_product_list(monkeypatch, asyn
     assert call["photo"] is None
     assert call["reply_markup"][0][0]["text"] == "1. Solo Product"
     assert call["reply_markup"][0][0]["payload"] == f"prod:{product.id}"
+
+
+@pytest.mark.asyncio
+async def test_show_product_card_short_description(monkeypatch):
+    """Карточка показывает только заголовок, цену и первую строку описания."""
+
+    class RecordingClient:
+        def __init__(self):
+            self.calls = []
+
+        async def edit_message(self, chat_id, message_id, text, reply_markup=None, photo_url=None, photo=None):
+            self.calls.append(
+                {
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "text": text,
+                    "reply_markup": reply_markup,
+                    "photo_url": photo_url,
+                    "photo": photo,
+                }
+            )
+
+    full_desc = (
+        "Открывающийся кулон с секретным посланием внутри.\n"
+        "Идеальный подарок дочке, маме, любимому человеку или подруге.\n\n"
+        "✨ Особенности:\n"
+        "- Гравировка всех 4 граней включена в цену\n"
+        "- Ювелирная сталь — не темнеет, не ржавеет\n\n"
+        "⏱ Срок изготовления: 1–2 рабочих дня\n"
+        "📦 Доставка только СДЭК\n"
+        "💝 Макет и гравировка — бесплатно"
+    )
+
+    async def mock_get_product_card(session, product_id, photo_index=0):
+        return ProductCardDTO(
+            title="Кулон-столбик",
+            price=840,
+            description=full_desc,
+            photo_url="url",
+            photo=None,
+            photo_count=3,
+            photo_index=0,
+            category_slug="kole-i-kulony",
+        )
+
+    monkeypatch.setattr(catalog_service, "get_product_card", mock_get_product_card)
+
+    client = RecordingClient()
+    await catalog_handler.show_product_card(client, chat_id=1, message_id="msg_1", product_id=1)
+
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert "Кулон-столбик" in call["text"]
+    assert "💰 840 ₽" in call["text"]
+    assert "Открывающийся кулон с секретным посланием внутри." in call["text"]
+    assert "✨ Особенности" not in call["text"]
+    assert "Срок" not in call["text"]
+    assert "Доставка" not in call["text"]

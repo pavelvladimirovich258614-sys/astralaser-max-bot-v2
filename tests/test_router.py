@@ -149,3 +149,45 @@ async def test_router_message_catalog_command(router):
     }
     await r.process(payload)
     assert any("send_message" == c["method"] for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_duplicate_callback_ignored(router):
+    r, client = router
+    payload = _make_callback_payload("menu:cart")
+    await r.process(payload)
+    await r.process(payload)
+    cart_calls = [c for c in client.calls if c.get("text") == "🛒 Корзина — скоро."]
+    assert len(cart_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_router_different_payload_not_blocked(router):
+    r, client = router
+    await r.process(_make_callback_payload("menu:cart"))
+    await r.process(_make_callback_payload("menu:orders"))
+    assert len(client.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_router_duplicate_after_ttl_allowed(router, monkeypatch):
+    r, client = router
+    monkeypatch.setattr(r, "_dedup_ttl", 0.05)
+    call_times = [0.0, 0.03, 0.06]
+    idx = 0
+
+    def fake_monotonic():
+        nonlocal idx
+        if idx < len(call_times):
+            t = call_times[idx]
+            idx += 1
+            return t
+        return call_times[-1] + 1.0
+
+    monkeypatch.setattr("src.bot.router.time.monotonic", fake_monotonic)
+    payload = _make_callback_payload("menu:cart")
+    await r.process(payload)
+    await r.process(payload)
+    await r.process(payload)
+    cart_calls = [c for c in client.calls if c.get("text") == "🛒 Корзина — скоро."]
+    assert len(cart_calls) == 2

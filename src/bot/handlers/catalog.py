@@ -11,10 +11,13 @@ from src.db.engine import async_session_maker
 from src.services import cart_service, catalog_service, user_service
 
 
-def _truncate(text: str, length: int = 250) -> str:
-    if len(text) <= length:
-        return text
-    return text[: length - 1].rstrip() + "…"
+def _short_description(text: str, max_length: int = 120) -> str:
+    """Берёт только первое предложение/строку описания, без блоков Особенности/Сроки/Доставка."""
+    first_para = text.split("\n\n")[0].strip()
+    first_line = first_para.split("\n")[0].strip()
+    if len(first_line) <= max_length:
+        return first_line
+    return first_line[: max_length - 1].rstrip() + "…"
 
 
 async def show_catalog(
@@ -76,7 +79,7 @@ async def show_product_card(
         await client.edit_message(chat_id, message_id, "Товар не найден.")
         return
 
-    text = f"{card.title}\n💰 {card.price} ₽\n\n{_truncate(card.description)}"
+    text = f"{card.title}\n💰 {card.price} ₽\n\n{_short_description(card.description)}"
     keyboard = product_card_keyboard(product_id, card.photo_index, card.photo_count, card.category_slug)
     if card.photo:
         await client.edit_message(

@@ -1,67 +1,51 @@
-# Стартовый промпт для следующей сессии Кими
+# NEXT_SESSION_PROMPT (2026-05-09 → 2026-05-10)
 
-Контекст для продолжения работы над astralaser-max-bot v2.0 (мессенджер MAX, не Telegram).
+Ты Codex-CLI исполнитель, я навигатор. Узкие промпты, стоп-правила, TDD, без коммитов без моей команды, всегда сначала diff + план словами.
 
-## Где остановились на конец сессии 2026-05-08
+## Прочитать в порядке
+1. NEXT_SESSION_PROMPT.md (этот файл)
+2. progress.md — Session Record 2026-05-09
+3. AGENTS.md
+4. feature_list.json (F05 in_progress, F06 todo)
+5. docs/TZ.md разделы 2.2 (attachments/upload) и edit-message
+6. src/bot/handlers/catalog.py (show_product_card)
+7. src/bot/max_client.py (_build_payload, edit_message)
+8. src/services/catalog_service.py (get_product_card)
 
-F05 (каталог) в статусе in_progress, технически почти готов. Все правки последней сессии локально закоммичены через git commit без push. Push будет после финального live-test.
+## Текущее состояние
+- F05 каталог почти готов, остался один баг: серое пустое фото при PUT /messages в карточках.
+- 58 тестов зелёные, ruff чисто, mypy 1 known warning.
+- 2 коммита впереди origin/main, push отложен.
 
-**Прочитай в первую очередь:**
-1. progress.md последнюю секцию ## Session Record — 2026-05-08 (F05 WIP: контент и навигация починены, ждём финальный live-test) — это твой полный контекст.
-2. AGENTS.md — правила работы агента в этом проекте.
-3. docs/TZ.md — техническое задание.
-4. feature_list.json — текущий статус всех фич.
+## Твой первый ответ
+- "ок, вник" + 3-5 строк состояния.
+- Дождись моей команды на эксперимент 1.
 
-## Применимые skills для этой задачи
+## Эксперимент 1 (по моей команде)
+Скилл: incremental-implementation + tdd.
 
-Из доступных тебе skills используй:
-- **debugging-and-error-recovery** — для диагностики если live-test покажет баги (особенно по логам uvicorn)
-- **incremental-implementation** — для узких пошаговых правок
-- **test-driven-development** — все правки идут вместе с тестами в одном промпте
-- **git-workflow-and-versioning** — для финального commit + push при закрытии F05
-- **code-review-and-quality** — самопроверка дифов перед предъявлением навигатору
+Минимальное изменение в src/bot/handlers/catalog.py:
+- В show_product_card временно вызывать edit_message только с photo_url=card.photo_url, photo=None, независимо от наличия токена.
+- Не трогать БД, не трогать seed, не трогать max_client.
 
-## Архитектурные контракты (нельзя нарушать)
+Шаги:
+1. Diff + план словами, ждать approve.
+2. После approve: внести изменение, обновить/добавить тест в tests/test_catalog.py (карточка использует photo_url, не token).
+3. pytest -v, ruff check ., mypy src — выложить вывод.
+4. Жди мою команду на uvicorn restart и live-test.
+5. После live-test:
+   - Фото появилось → гипотеза 1 подтверждена. Жди промпта на финальную правку (photo_url как основной путь, token как опциональный fallback) + закрытие F05.
+   - Серый блок остался → откатить изменение, доложить, ждать промпта на эксперимент 2.
 
-- 3 окна PowerShell. Окно 1 uvicorn python -m uvicorn src.main:app --host 0.0.0.0 --port 8080. Окно 2 SSH туннель ssh -R 8090:127.0.0.1:8080 root@82.26.151.81 (НЕ localhost — IPv6 грабли). Окно 3 свободные команды.
-- Happ VPN строго в режиме Proxy (не TUN).
-- Webhook: nginx VPS 82.26.151.81 → astralaser.ai-agent-paul.ru → MAX.
-- Источник правды по товарам: data/seed_products.json. scripts/seed_db.py делает идемпотентный upsert по (category, sort_order).
-- Фото в MAX: attachments=[{type:"image", payload:{token:"..."}}], токены из ProductPhoto.max_photo_token.
-- Inline-клавиатуры: attachments с callback_data={"type":"callback","payload":"..."}.
-- edit_message: PUT /messages?message_id=... без chat_id.
-- answer_callback_query НЕ вызываем — даёт 400 без payload.
+## Стоп-правила
+- Не править scripts/seed_db.py, src/services/max_upload_service.py, БД, миграции.
+- Не делать новый upload фото.
+- Не коммитить и не пушить без моей команды.
+- Не редактировать progress.md и feature_list.json до закрытия F05.
 
-## Текущее состояние кода
-
-- max_client.py: _build_payload имеет параметр force_attachments. edit_message всегда True, send_message по умолчанию False.
-- handlers/catalog.py: show_category всегда показывает список товаров (без авто-разворота в карточку).
-- data/seed_products.json и БД синхронизированы, описания без дублирования.
-- 21 фото залито в MAX, max_photo_token в БД у всех 21 записей.
-- Тесты: 54 passed, ruff clean, mypy clean.
-
-## Что осталось до закрытия F05
-
-Один финальный live-test в живом MAX. Потом отдельный промпт #5 на закрытие F05 + git push.
-
-## Известный косметический не-блокер
-
-Главное меню при возврате через «🏠 Главная» в MAX иногда рендерит длинный текст столбиком по одной букве. Чинится отдельным промптом сжатием текста после закрытия F05.
-
-## Стиль работы
-
-Узкие промпты со стоп-правилами. Не коммитить без явной команды навигатора. Не трогать progress.md и feature_list.json пока фича не подтверждена в живом MAX. Тесты идут вместе с правкой кода в одном промпте. Перед тем как править код — показывать диффы и план словами навигатору на согласование.
-
-## Первая задача на эту сессию
-
-Пользователь сейчас перезапустит uvicorn и сделает финальный live-test в MAX по полному сценарию. От тебя нужно:
-
-1. Прочитать progress.md, AGENTS.md, feature_list.json.
-2. Ответить «ок, вник» с краткой сводкой текущего состояния (3-5 строк) — чтобы навигатор убедился что ты в контексте.
-3. Дождаться отчёта пользователя о live-test по двум критическим точкам:
-   - Возврат «🔙 К категории» из карточки → чистый список товаров без фото (да/нет).
-   - Возврат «🏠 Главная» → главное меню с фото и 5 кнопками (да/нет).
-4. Если оба «да» — навигатор даст команду писать финальный промпт #5 на закрытие F05.
-5. Если что-то «нет» — диагностируй по логам uvicorn (Окно 1, ищи строки webhook received, httpx HTTP Request PUT, любые Traceback) и предложи план фикса навигатору. Не правь код без согласования плана.
-
-**Не начинай писать код пока не получишь отчёт о live-test и команду навигатора. Жди.**
+## Утренний чеклист навигатора
+1. Терминал 1: python -m uvicorn src.main:app --host 0.0.0.0 --port 8080 — ждать "Webhook subscribed".
+2. Терминал 2: ssh -R 8090:127.0.0.1:8080 root@82.26.151.81.
+3. Happ VPN в Proxy.
+4. Отправить Kimi стартовое сообщение, дождаться "ок, вник".
+5. Дать команду на эксперимент 1.

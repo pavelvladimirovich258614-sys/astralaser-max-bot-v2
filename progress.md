@@ -4,11 +4,49 @@
 
 ## Current Verified State
 
-**Статус проекта:** F05 implemented + photos uploaded → awaiting full live test on next session
+**Статус проекта:** F05 in_progress → диагностика серого фото при PUT /messages, эксперимент 1 запланирован
 **Текущая фича `in_progress`:** F05 — Каталог: категории, карточки, пагинация фото
 **Следующая фича по дорожной карте:** F06 — Корзина
 **Последний коммит:** `feat(F05): catalog + photo upload via /uploads (token-based) + seed completed`
-**Тесты:** 49 passed
+**Тесты:** 58 passed
+
+---
+
+## Session Record — 2026-05-09 (диагностика серого фото)
+
+### Состояние F05
+- in_progress, код локально, 2 коммита впереди origin/main, push отложен.
+- 58 тестов зелёные, ruff чисто, mypy: 1 pre-existing warning в webhook.py:23 (не блокер, переносится в F06).
+- Внесены: `_short_description(text, max_length=120)` в handlers/catalog.py, dedup callback в router.py с TTL 1.0 s и LRU 256.
+
+### Симптом
+- При пагинации (photo:N:M) в карточках всех категорий — серое пустое фото; текст рендерится узкой колонкой справа от пустого блока.
+- Главное меню (POST /messages с photo_url) — фото показывается корректно.
+- Webhook 200 OK, Traceback нет, токены max_photo_token в БД присутствуют.
+
+### Диагностика (read-only, отчёт Kimi)
+- show_product_card передаёт photo={"token": max_photo_token} в edit_message → PUT /messages.
+- Главное меню использует photo_url → POST /messages с {"type":"image","payload":{"url":"..."}}.
+- Различие POST vs PUT: метод + источник image (url vs token).
+- В БД хранится только max_photo_token (String 512), без timestamp/photo_id/TTL.
+
+### Три гипотезы (ранжированы)
+1. ~70% — токен MAX upload не работает в PUT /messages (одноразовый или несовместим с edit).
+2. ~20% — PUT /messages не поддерживает замену image attachment, нужен другой формат / merge со старыми attachments.
+3. ~10% — токен протух (TTL upload-токена).
+
+### План на следующую сессию
+- Эксперимент 1: заставить show_product_card передавать photo_url вместо photo(token) в edit_message; uvicorn restart; live-test одной карточки.
+- Если фото появилось → гипотеза 1 подтверждена → закрепить photo_url-путь, сделать photo(token) опциональным fallback, добавить тест, прогнать pytest/ruff/mypy.
+- Если серый блок остался → эксперимент 2 (POST send_message вместо PUT edit_message с тем же token).
+- Если и это не помогло → эксперимент 3 (повторный upload + сравнение токенов; вывод о TTL).
+
+### Известные не-блокеры
+- Главное меню иногда рендерится столбиком (косметика, после F05).
+- mypy webhook.py:23 missing type parameters for Request (в F06).
+
+### Git
+- Локально 2 коммита впереди origin/main, push после успешного эксперимента и закрытия F05.
 
 ---
 

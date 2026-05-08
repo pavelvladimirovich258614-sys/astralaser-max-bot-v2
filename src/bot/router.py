@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import time
+from collections import OrderedDict
 from typing import Any
 
 from src.bot.handlers import catalog as catalog_handler
@@ -13,6 +15,9 @@ logger = logging.getLogger(__name__)
 class UpdateRouter:
     def __init__(self, client: MAXClient) -> None:
         self.client = client
+        self._callback_dedup: OrderedDict[tuple[str, str, str], float] = OrderedDict()
+        self._dedup_ttl = 1.0
+        self._dedup_max_size = 256
 
     async def process(self, payload: dict[str, Any]) -> None:
         try:
@@ -53,6 +58,22 @@ class UpdateRouter:
 
         if not callback_id or not chat_id or not user_id:
             return
+
+        dedup_key = (str(user_id), str(message_id), str(data))
+        now = time.monotonic()
+
+        expired = [k for k, t in self._callback_dedup.items() if now - t > self._dedup_ttl]
+        for k in expired:
+            del self._callback_dedup[k]
+
+        if dedup_key in self._callback_dedup:
+            logger.debug("duplicate callback skipped: %s", dedup_key)
+            return
+
+        if len(self._callback_dedup) >= self._dedup_max_size:
+            self._callback_dedup.popitem(last=False)
+
+        self._callback_dedup[dedup_key] = now
 
         if data == "consent:accept":
             await start_handler.handle_consent_accept(self.client, chat_id, user_id, message_id)
