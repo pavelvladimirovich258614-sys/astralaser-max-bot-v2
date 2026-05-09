@@ -133,6 +133,6 @@ async def add_to_cart(
         await session.commit()
         await cart_service.add_item(session, user, product_id, quantity=1)
 
-    text = "✅ Товар добавлен в корзину."
-    keyboard = added_to_cart_keyboard()
+    text = "✅ Товар добавлен в корзину.\n\nМожете перейти в корзину или вернуться к товару."
+    keyboard = added_to_cart_keyboard(product_id)
     await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)

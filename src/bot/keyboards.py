@@ -57,10 +57,10 @@ def product_card_keyboard(product_id: int, photo_index: int, photo_count: int, c
     ]
 
 
-def added_to_cart_keyboard() -> list[list[dict[str, Any]]]:
-    """После добавления в корзину: к корзине / назад / главная."""
+def added_to_cart_keyboard(product_id: int) -> list[list[dict[str, Any]]]:
+    """После добавления в корзину: к корзине / назад к товару / главная."""
     return [
-        [{"type": "callback", "text": "🛒 К корзине", "payload": "menu:cart"}],
-        [{"type": "callback", "text": "← Назад к товару", "payload": "noop"}],
+        [{"type": "callback", "text": "🛒 Перейти в корзину", "payload": "menu:cart"}],
+        [{"type": "callback", "text": "🔙 К товару", "payload": f"prod:{product_id}"}],
         [{"type": "callback", "text": "🏠 Главная", "payload": "home"}],
     ]

@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from src.bot.handlers import catalog as catalog_handler
+from src.bot.keyboards import added_to_cart_keyboard
 from src.db.models import Base, Category, Product
 from src.services import catalog_service
 from src.services.catalog_service import ProductCardDTO
@@ -360,3 +361,54 @@ async def test_show_product_card_uses_short_description_when_flag_disabled(monke
     assert "Срок изготовления" not in call["text"]
     assert "Доставка только СДЭК" not in call["text"]
     assert call["photo"] == {"token": "abc123"}
+
+
+def test_added_to_cart_keyboard_payloads():
+    """Клавиатура после добавления в корзину содержит реальные callback'и, без noop."""
+    kb = added_to_cart_keyboard(product_id=42)
+    assert kb[0][0]["payload"] == "menu:cart"
+    assert kb[0][0]["text"] == "🛒 Перейти в корзину"
+    assert kb[1][0]["payload"] == "prod:42"
+    assert kb[1][0]["text"] == "🔙 К товару"
+    assert kb[2][0]["payload"] == "home"
+    assert "noop" not in str(kb)
+
+
+@pytest.mark.asyncio
+async def test_add_to_cart_shows_confirmation(monkeypatch, async_engine, db_session):
+    """add_to_cart вызывает edit_message с подтверждением и клавиатурой с prod:{id}."""
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(catalog_handler, "async_session_maker", test_session_maker)
+
+    class FakeUser:
+        id = 1
+
+    calls = []
+
+    async def fake_get_or_create_user(session, **kwargs):
+        return FakeUser()
+
+    async def fake_add_item(session, user, product_id, quantity=1):
+        calls.append({"product_id": product_id, "quantity": quantity})
+
+    monkeypatch.setattr(catalog_handler.user_service, "get_or_create_user", fake_get_or_create_user)
+    monkeypatch.setattr(catalog_handler.cart_service, "add_item", fake_add_item)
+
+    class RecordingClient:
+        def __init__(self):
+            self.calls = []
+
+        async def edit_message(self, chat_id, message_id, text, reply_markup=None, photo_url=None, photo=None):
+            self.calls.append({"chat_id": chat_id, "text": text, "reply_markup": reply_markup})
+
+    client = RecordingClient()
+    await catalog_handler.add_to_cart(client, chat_id=1, user_id=123, message_id="msg_1", product_id=42)
+
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert "Товар добавлен в корзину" in call["text"]
+    assert "Можете перейти в корзину" in call["text"]
+    assert call["reply_markup"][1][0]["payload"] == "prod:42"
+    assert len(calls) == 1
+    assert calls[0]["product_id"] == 42
+    assert calls[0]["quantity"] == 1

@@ -4,11 +4,11 @@
 
 ## Current Verified State
 
-**Статус проекта:** F05 completed → F06 in_progress
+**Статус проекта:** F05 completed → F06 in_progress (F06.1 completed)
 **Текущая фича `in_progress`:** F06 — Корзина
 **Следующая фича по дорожной карте:** F07 — Оформление заказа (FSM)
-**Последний коммит:** `feat(F05): complete catalog photo navigation workaround`
-**Тесты:** 66 passed
+**Последний коммит:** `feat(F06): add cart confirmation flow`
+**Тесты:** 68 passed
 
 ---
 
@@ -39,6 +39,36 @@ F06 декомпозирована на 4 staged-подфичи внутри о�
 - Не трогать F07 (оформление заказа, FSM, Order).
 - Не менять `feature_list.json`, `seed_db.py`, БД, миграции, `.env`.
 - Не делать git commit без прохождения тестов.
+
+---
+
+## Session Record — 2026-05-09 (F06.1 completed after live-test)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F06.1 — Добавление товара в корзину из карточки товара
+**Status:** completed inside parent F06
+
+### What was done
+
+- `added_to_cart_keyboard` теперь принимает `product_id` и больше не содержит `noop`.
+- Экран подтверждения после 🛒 В корзину показывает полезные inline-кнопки:
+  - 🛒 Перейти в корзину
+  - 🔙 К товару
+  - 🏠 Главная
+- Кнопка 🔙 К товару ведёт через `prod:{product_id}`.
+- Повторное добавление использует существующий `cart_service`/`cart_crud` upsert quantity.
+- Экран корзины, qty, rm, clear и checkout не реализовывались — остаются для F06.2–F06.4.
+
+### Evidence
+
+- pytest: 68 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 27 source files ✅
+- Live-test MAX: кулон-столбик ok, браслет ok, подтверждение добавления ok, кнопки ok, «Перейти в корзину» ведёт в ожидаемую заглушку до F06.2.
+
+### Next best action
+
+Начать F06.2 — Просмотр корзины. Реализовать `menu:cart`/`cart`: пустая корзина и непустая корзина со списком товаров, количеством, суммой и итогом. Не реализовывать qty/rm/clear/checkout до F06.3/F06.4.
 
 ---
 

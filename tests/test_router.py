@@ -19,7 +19,7 @@ class FakeClient:
         self.calls: list[dict[str, Any]] = []
 
     async def edit_message(self, chat_id, message_id, text, reply_markup=None, photo_url=None, photo=None):
-        self.calls.append({"method": "edit_message", "chat_id": chat_id, "text": text})
+        self.calls.append({"method": "edit_message", "chat_id": chat_id, "text": text, "reply_markup": reply_markup})
 
     async def send_message(self, chat_id, text, reply_markup=None, photo_url=None, photo=None):
         self.calls.append({"method": "send_message", "chat_id": chat_id, "text": text})
@@ -169,8 +169,10 @@ async def test_router_callback_photo_id_idx(router, monkeypatch):
 async def test_router_callback_add_id(router):
     r, client = router
     await r.process(_make_callback_payload("add:1"))
-    # add_to_cart создаёт пользователя и пытается добавить; при отсутствии продукта — всё равно edit_message
-    assert any("edit_message" == c["method"] for c in client.calls)
+    edit_calls = [c for c in client.calls if c.get("method") == "edit_message"]
+    assert len(edit_calls) == 1
+    assert "Товар добавлен в корзину" in edit_calls[0]["text"]
+    assert any(b.get("payload") == "prod:1" for row in edit_calls[0].get("reply_markup", []) for b in row)
 
 
 @pytest.mark.asyncio
