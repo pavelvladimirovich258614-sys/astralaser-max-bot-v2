@@ -118,7 +118,9 @@
     {
       "id": "F07",
       "name": "Оформление заказа (FSM)",
-      "status": "in_progress",
+      "status": "completed",
+      "completed_at": "2026-05-10",
+      "evidence": "pytest: 137 passed, ruff: exit 0, mypy: clean, init.ps1: READY, live-test MAX: order #4 840 ₽, manager notification received, F05 photo pagination fixed",
       "depends_on": ["F06"],
       "acceptance_criteria": [
         "FSM реализован через UserState (persistent в БД)",

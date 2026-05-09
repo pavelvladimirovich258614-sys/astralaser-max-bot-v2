@@ -4,11 +4,51 @@
 
 ## Current Verified State
 
-**Статус проекта:** F07 in_progress (F07.4 completed)
-**Текущая фича `in_progress`:** F07 — Оформление заказа (FSM)
-**Следующий этап:** F07.5 — Уведомления менеджерам
-**Последний коммит:** `feat(F07): create order and clear cart on confirm`
-**Тесты:** 133 passed
+**Статус проекта:** F07 completed → F08 todo
+**Последняя закрытая фича:** F07 — Оформление заказа (FSM)
+**Следующая фича по дорожной карте:** F08 — Менеджер и помощь
+**Последний коммит:** `feat(F07): notify managers after order confirmation`
+**Тесты:** 137 passed
+
+---
+
+## Session Record — 2026-05-10 (F07.5 completed after live-test)
+
+**Agent:** GLM-5.1 (Z.AI Coding Plan / OpenCode)
+**Feature:** F07.5 — Уведомления менеджерам + F05 follow-up photo fallback fix
+**Status:** completed; parent F07 completed
+
+### What was done
+
+**F07.5 — Уведомления менеджерам:**
+- `src/config.py`: добавлены `max_admin_chat_ids` и свойство `admin_chat_ids_list`.
+- `src/services/order_service.py`: добавлен `format_manager_notification()` — формирует текст уведомления с номером заказа, товарами, итогом, ФИО, телефоном, адресом и комментарием.
+- `src/bot/handlers/order.py`: `confirm_order` отправляет уведомление менеджерам через `send_message` по `admin_chat_ids_list`. Best-effort: падение отправки одному админу не ломает заказ. Пустой список — safe no-op.
+- `MAX_ADMIN_USER_IDS` не используется как адресат уведомлений. `manager_phone` не используется как адресат.
+- 5 новых/обновлённых тестов в `tests/test_order.py`.
+
+**F05 follow-up — Product photo pagination fallback:**
+- `src/bot/handlers/catalog.py`: в режиме `delete_message + send_message` теперь используется `card.photo` (MAX token), если он есть. `photo_url` — только fallback при отсутствии токена.
+- Исправлен live-bug: карточка товара исчезала при пагинации из-за `Failed to upload image` при использовании внешнего URL.
+- 2 новых/обновлённых теста в `tests/test_catalog.py`.
+
+### Evidence
+
+- pytest: 137 passed ✅
+- ruff: exit 0 ✅
+- mypy: `Success: no issues found in 31 source files` ✅
+- Live-test MAX:
+  - F07.5: заказ #4 оформлен, итог 840 ₽, пользовательское подтверждение получено, админское уведомление пришло, корзина после заказа пустая ✅
+  - F05: брелок листался 1/5 → 4/5, карточка не исчезала, `Failed to upload image` отсутствовал ✅
+
+### Known note
+
+- `MAX_ADMIN_CHAT_IDS` в `.env` должен содержать dialog chat_id (не user_id). Chat_id можно найти в логах uvicorn: `webhook raw payload` → `recipient.chat_id`. Для второго админа chat_id появится после того, как он напишет `/start` боту.
+- MAX возвращает 403 `access.denied` при `delete_message` пользовательских FSM-сообщений — не блокирует заказ, best-effort.
+
+### Next best action
+
+Начать F08 — Менеджер и помощь. Реализовать `/contact`, `[💬 Менеджер]`, `/help`, `[❓ Помощь]`. Не начинать без отдельного PLAN-этапа.
 
 ---
 

@@ -12,6 +12,7 @@ from src.bot.keyboards import (
     order_summary_keyboard,
 )
 from src.bot.max_client import MAXClient
+from src.config import get_settings
 from src.db.engine import async_session_maker
 from src.services import cart_service, fsm_service, order_service, user_service
 
@@ -164,6 +165,24 @@ async def confirm_order(
             await cart_service.clear_cart(session, user.id)
             await fsm_service.clear_state(session, user.id)
             await session.commit()
+
+            notification_text = order_service.format_manager_notification(
+                order_id=order.id,
+                cart_view=cart_view,
+                customer_name=data.get("customer_name", ""),
+                customer_phone=data.get("phone", ""),
+                delivery_address=data.get("address", ""),
+                notes=data.get("notes"),
+            )
+            admin_chat_ids = get_settings().admin_chat_ids_list
+            if not admin_chat_ids:
+                logger.info("no admin chat IDs configured, skipping manager notifications")
+            else:
+                for admin_chat_id in admin_chat_ids:
+                    try:
+                        await client.send_message(admin_chat_id, notification_text)
+                    except Exception:
+                        logger.warning("failed to notify admin chat %s", admin_chat_id, exc_info=True)
 
             text = (
                 f"✅ Заказ оформлен!\n\n"

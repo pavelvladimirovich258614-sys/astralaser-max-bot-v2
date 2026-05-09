@@ -7,6 +7,29 @@ from src.db.models import Order
 from src.services.cart_service import CartViewDTO
 
 
+def format_manager_notification(
+    order_id: int,
+    cart_view: CartViewDTO,
+    customer_name: str,
+    customer_phone: str,
+    delivery_address: str,
+    notes: str | None,
+) -> str:
+    """Сформировать текст уведомления менеджеру о новом заказе."""
+    lines = [f"🔔 Новый заказ #{order_id}\n"]
+    lines.append("Товары:")
+    for idx, item in enumerate(cart_view.items, 1):
+        lines.append(f"{idx}. {item.title}")
+        lines.append(f"{item.price} ₽ × {item.quantity} = {item.line_total} ₽")
+    lines.append(f"\nИтого: {cart_view.total} ₽\n")
+    lines.append("Клиент:")
+    lines.append(f"👤 {customer_name}")
+    lines.append(f"📞 {customer_phone}")
+    lines.append(f"📍 {delivery_address}")
+    lines.append(f"✏️ {notes or '—'}")
+    return "\n".join(lines)
+
+
 async def create_order_from_cart(
     session: AsyncSession,
     user_id: int,

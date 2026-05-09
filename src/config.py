@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_port: int = 8000
     database_url: str = "sqlite+aiosqlite:///./astralaser.db"
     max_admin_user_ids: str = ""
+    max_admin_chat_ids: str = ""
     manager_name: str = "Менеджер"
     manager_phone: str = ""
     manager_vk_link: str = ""
@@ -23,6 +24,10 @@ class Settings(BaseSettings):
     @property
     def admin_ids_list(self) -> list[str]:
         return [x.strip() for x in self.max_admin_user_ids.split(",") if x.strip()]
+
+    @property
+    def admin_chat_ids_list(self) -> list[str]:
+        return [x.strip() for x in self.max_admin_chat_ids.split(",") if x.strip()]
 
 
 def get_settings() -> Settings:

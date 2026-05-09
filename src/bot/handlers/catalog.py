@@ -96,9 +96,14 @@ async def show_product_card(
         )
         deleted = await client.delete_message(chat_id, message_id)
         logger.info("product_card delete result old_message_id=%s deleted=%s", message_id, deleted)
-        send_result = await client.send_message(
-            chat_id, text, reply_markup=keyboard, photo_url=card.photo_url,
-        )
+        if card.photo:
+            send_result = await client.send_message(
+                chat_id, text, reply_markup=keyboard, photo=card.photo,
+            )
+        else:
+            send_result = await client.send_message(
+                chat_id, text, reply_markup=keyboard, photo_url=card.photo_url,
+            )
         new_msg_id: str | None = None
         if isinstance(send_result, dict):
             new_msg_id = (

@@ -679,8 +679,13 @@ async def test_confirm_order_clears_user_state(db_session):
 
 
 @pytest.mark.asyncio
-async def test_confirm_order_shows_confirmation_with_order_id(db_session):
+async def test_confirm_order_shows_confirmation_with_order_id(db_session, monkeypatch):
     """Пользователь получает сообщение с номером заказа."""
+    monkeypatch.setattr(
+        order_handler,
+        "get_settings",
+        lambda: type("S", (), {"admin_chat_ids_list": []})(),
+    )
     user = User(max_user_id="904", full_name="Test")
     db_session.add(user)
     await db_session.flush()
@@ -750,8 +755,13 @@ async def test_confirm_order_wrong_state_does_not_create_order(db_session):
 
 
 @pytest.mark.asyncio
-async def test_confirm_order_does_not_send_manager_notifications(db_session):
-    """confirm_order не отправляет уведомления менеджерам."""
+async def test_confirm_order_no_notification_when_no_admins(db_session, monkeypatch):
+    """При пустом admin_ids_list заказ оформляется, уведомления не отправляются."""
+    monkeypatch.setattr(
+        order_handler,
+        "get_settings",
+        lambda: type("S", (), {"admin_chat_ids_list": []})(),
+    )
     user = User(max_user_id="907", full_name="Test")
     db_session.add(user)
     await db_session.flush()
@@ -770,9 +780,121 @@ async def test_confirm_order_does_not_send_manager_notifications(db_session):
     client = RecordingClient()
     await order_handler.confirm_order(client, chat_id=1, user_id="907", message_id="msg_1")
 
-    # Убедиться, что send_message не вызван (используется edit_message)
+    async with order_handler.async_session_maker() as fresh:
+        order = await order_crud.get_by_id(fresh, 1)
+    assert order is not None
+
     send_calls = [c for c in client.calls if c["method"] == "send_message"]
     assert len(send_calls) == 0
     edit_calls = [c for c in client.calls if c["method"] == "edit_message"]
     assert len(edit_calls) == 1
     assert "Заказ оформлен" in edit_calls[0]["text"]
+
+
+# ---------------------------------------------------------------------------
+# F07.5 — Уведомления менеджерам
+# ---------------------------------------------------------------------------
+
+
+def _make_settings(admin_chat_ids: list[str]) -> object:
+    return type("S", (), {"admin_chat_ids_list": admin_chat_ids})()
+
+
+async def _setup_order_for_confirm(db_session, max_user_id="910"):
+    user = User(max_user_id=max_user_id, full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+    product = Product(category_id=1, title="Браслет с гравировкой", description="D", price=940, cover_url="url")
+    db_session.add(product)
+    await db_session.flush()
+    cart = CartItem(user_id=user.id, product_id=product.id, quantity=1)
+    db_session.add(cart)
+    await db_session.commit()
+    await fsm_service.set_state(
+        db_session, user.id, "order:ready_confirm",
+        {"customer_name": "Иван Иванов", "phone": "+7 999 123 45 67", "address": "Москва, ул. Тестовая, 1", "notes": "Тест F07.5"}
+    )
+    return user, product
+
+
+@pytest.mark.asyncio
+async def test_confirm_order_sends_notification_to_admins(db_session, monkeypatch):
+    """При двух admin IDs отправляются уведомления обоим."""
+    monkeypatch.setattr(
+        order_handler, "get_settings",
+        lambda: _make_settings(["196318594", "196318595"]),
+    )
+    await _setup_order_for_confirm(db_session)
+
+    client = RecordingClient()
+    await order_handler.confirm_order(client, chat_id=1, user_id="910", message_id="msg_1")
+
+    admin_calls = [c for c in client.calls if c["method"] == "send_message" and c["chat_id"] in ("196318594", "196318595")]
+    assert len(admin_calls) == 2
+    chat_ids = {c["chat_id"] for c in admin_calls}
+    assert chat_ids == {"196318594", "196318595"}
+
+
+@pytest.mark.asyncio
+async def test_confirm_order_notification_format(db_session, monkeypatch):
+    """Текст уведомления содержит все данные заказа."""
+    monkeypatch.setattr(
+        order_handler, "get_settings",
+        lambda: _make_settings(["196318594"]),
+    )
+    await _setup_order_for_confirm(db_session, max_user_id="911")
+
+    client = RecordingClient()
+    await order_handler.confirm_order(client, chat_id=1, user_id="911", message_id="msg_1")
+
+    admin_calls = [c for c in client.calls if c["method"] == "send_message" and c["chat_id"] == "196318594"]
+    assert len(admin_calls) == 1
+    text = admin_calls[0]["text"]
+    assert "Новый заказ" in text
+    assert "Браслет с гравировкой" in text
+    assert "940 ₽" in text
+    assert "Итого:" in text
+    assert "Иван Иванов" in text
+    assert "+7 999 123 45 67" in text
+    assert "Москва, ул. Тестовая, 1" in text
+    assert "Тест F07.5" in text
+
+
+@pytest.mark.asyncio
+async def test_confirm_order_notification_failure_does_not_break_order(db_session, monkeypatch):
+    """Если send_message падает для одного админа, заказ всё равно оформлен."""
+
+    class FailingClient(RecordingClient):
+        async def send_message(self, chat_id, text, reply_markup=None, photo_url=None, photo=None):
+            if chat_id == "196318594":
+                raise RuntimeError("network error")
+            return await super().send_message(chat_id, text, reply_markup, photo_url, photo_url)
+
+    monkeypatch.setattr(
+        order_handler, "get_settings",
+        lambda: _make_settings(["196318594", "196318595"]),
+    )
+    await _setup_order_for_confirm(db_session, max_user_id="912")
+
+    client = FailingClient()
+    await order_handler.confirm_order(client, chat_id=1, user_id="912", message_id="msg_1")
+
+    async with order_handler.async_session_maker() as fresh:
+        order = await order_crud.get_by_id(fresh, 1)
+    assert order is not None
+    assert order.total_amount == 940
+
+    async with order_handler.async_session_maker() as fresh:
+        cart_items = await cart_crud.get_user_cart(fresh, order.user_id)
+    assert cart_items == []
+
+    async with order_handler.async_session_maker() as fresh:
+        state, _ = await fsm_service.get_state(fresh, order.user_id)
+    assert state is None
+
+    edit_calls = [c for c in client.calls if c["method"] == "edit_message"]
+    assert len(edit_calls) == 1
+    assert "Заказ оформлен" in edit_calls[0]["text"]
+
+    admin_success = [c for c in client.calls if c["method"] == "send_message" and c["chat_id"] == "196318595"]
+    assert len(admin_success) == 1
