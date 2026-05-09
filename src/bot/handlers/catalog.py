@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+import os
+
 from src.bot.keyboards import (
     added_to_cart_keyboard,
     catalog_categories_keyboard,
@@ -9,6 +12,10 @@ from src.bot.keyboards import (
 from src.bot.max_client import MAXClient
 from src.db.engine import async_session_maker
 from src.services import cart_service, catalog_service, user_service
+
+logger = logging.getLogger(__name__)
+
+_USE_PHOTO_URL_IN_EDIT: bool = os.getenv("USE_PHOTO_URL_IN_EDIT", "1") == "1"
 
 
 def _short_description(text: str, max_length: int = 120) -> str:
@@ -79,9 +86,31 @@ async def show_product_card(
         await client.edit_message(chat_id, message_id, "Товар не найден.")
         return
 
-    text = f"{card.title}\n💰 {card.price} ₽\n\n{_short_description(card.description)}"
+    description_text = card.description if _USE_PHOTO_URL_IN_EDIT else _short_description(card.description)
+    text = f"{card.title}\n💰 {card.price} ₽\n\n{description_text}"
     keyboard = product_card_keyboard(product_id, card.photo_index, card.photo_count, card.category_slug)
-    if card.photo:
+    if _USE_PHOTO_URL_IN_EDIT:
+        logger.info(
+            "product_card replacing message old_message_id=%s product_id=%s photo_index=%s",
+            message_id, product_id, photo_index,
+        )
+        deleted = await client.delete_message(chat_id, message_id)
+        logger.info("product_card delete result old_message_id=%s deleted=%s", message_id, deleted)
+        send_result = await client.send_message(
+            chat_id, text, reply_markup=keyboard, photo_url=card.photo_url,
+        )
+        new_msg_id: str | None = None
+        if isinstance(send_result, dict):
+            new_msg_id = (
+                send_result.get("mid")
+                or send_result.get("id")
+                or send_result.get("message", {}).get("body", {}).get("mid")
+            )
+        if new_msg_id:
+            logger.info("product_card new message_id=%s", new_msg_id)
+        else:
+            logger.info("product_card new message_id=unknown")
+    elif card.photo:
         await client.edit_message(
             chat_id, message_id, text, reply_markup=keyboard, photo=card.photo,
         )

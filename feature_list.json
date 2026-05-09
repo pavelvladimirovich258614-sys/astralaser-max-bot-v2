@@ -85,7 +85,9 @@
     {
       "id": "F05",
       "name": "Каталог: категории, карточки, пагинация фото",
-      "status": "in_progress",
+      "status": "completed",
+      "completed_at": "2026-05-09",
+      "evidence": "pytest: 66 passed, ruff: exit 0, mypy: pre-existing webhook.py:23 only, live-test MAX: photo pagination works via delete+send workaround",
       "depends_on": ["F04"],
       "acceptance_criteria": [
         "[📚 Каталог] показывает 3 категории inline кнопками",
@@ -100,7 +102,7 @@
     {
       "id": "F06",
       "name": "Корзина",
-      "status": "todo",
+      "status": "in_progress",
       "depends_on": ["F05"],
       "acceptance_criteria": [
         "[🛒 Корзина] показывает товары через edit_message",

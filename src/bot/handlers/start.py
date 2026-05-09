@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from src.bot.keyboards import consent_keyboard, main_menu_inline_keyboard
 from src.bot.max_client import MAXClient
 from src.db.engine import async_session_maker
 from src.services import user_service
+
+_USE_PHOTO_URL_IN_EDIT: bool = os.getenv("USE_PHOTO_URL_IN_EDIT", "1") == "1"
 
 PRIVACY_TEXT = """🔒 Перед тем как продолжить
 
@@ -73,7 +76,15 @@ async def handle_consent_accept(
 
 async def show_main_menu(client: MAXClient, chat_id: int | str, message_id: str | None = None) -> None:
     """Показать главное меню. edit_message если message_id, иначе send_message."""
-    if message_id:
+    if message_id and _USE_PHOTO_URL_IN_EDIT:
+        await client.delete_message(chat_id, message_id)
+        await client.send_message(
+            chat_id,
+            MAIN_MENU_TEXT,
+            reply_markup=main_menu_inline_keyboard(),
+            photo_url=MAIN_MENU_PHOTO,
+        )
+    elif message_id:
         await client.edit_message(
             chat_id,
             message_id,

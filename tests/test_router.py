@@ -8,6 +8,8 @@ from sqlalchemy.pool import StaticPool
 from src.bot.handlers import catalog as catalog_handler
 from src.bot.router import UpdateRouter
 from src.db.models import Base
+from src.services import catalog_service
+from src.services.catalog_service import ProductCardDTO
 
 
 class FakeClient:
@@ -21,6 +23,9 @@ class FakeClient:
 
     async def send_message(self, chat_id, text, reply_markup=None, photo_url=None, photo=None):
         self.calls.append({"method": "send_message", "chat_id": chat_id, "text": text})
+
+    async def delete_message(self, chat_id, message_id):
+        self.calls.append({"method": "delete_message", "chat_id": chat_id, "message_id": message_id})
 
     async def close(self):
         pass
@@ -94,7 +99,9 @@ async def test_router_callback_menu_catalog(router):
 async def test_router_callback_home(router):
     r, client = router
     await r.process(_make_callback_payload("home"))
-    assert any("edit_message" == c["method"] for c in client.calls)
+    # Default flag True → delete_message + send_message
+    assert any("delete_message" == c["method"] for c in client.calls)
+    assert any("send_message" == c["method"] for c in client.calls)
 
 
 @pytest.mark.asyncio
@@ -113,19 +120,49 @@ async def test_router_callback_cat_slug(router):
 
 
 @pytest.mark.asyncio
-async def test_router_callback_prod_id(router):
+async def test_router_callback_prod_id(router, monkeypatch):
     r, client = router
+
+    async def fake_get_product_card(session, product_id, photo_index=0):
+        return ProductCardDTO(
+            title="Test",
+            price=100,
+            description="Desc",
+            photo_url="url",
+            photo=None,
+            photo_count=1,
+            photo_index=0,
+            category_slug="test",
+        )
+
+    monkeypatch.setattr(catalog_service, "get_product_card", fake_get_product_card)
     await r.process(_make_callback_payload("prod:1"))
-    # show_product_card вызывает edit_message
-    assert any("edit_message" == c["method"] for c in client.calls)
+    # Default flag True → delete_message + send_message
+    assert any("delete_message" == c["method"] for c in client.calls)
+    assert any("send_message" == c["method"] for c in client.calls)
 
 
 @pytest.mark.asyncio
-async def test_router_callback_photo_id_idx(router):
+async def test_router_callback_photo_id_idx(router, monkeypatch):
     r, client = router
+
+    async def fake_get_product_card(session, product_id, photo_index=0):
+        return ProductCardDTO(
+            title="Test",
+            price=100,
+            description="Desc",
+            photo_url="url",
+            photo=None,
+            photo_count=3,
+            photo_index=2,
+            category_slug="test",
+        )
+
+    monkeypatch.setattr(catalog_service, "get_product_card", fake_get_product_card)
     await r.process(_make_callback_payload("photo:1:2"))
-    # show_product_card вызывает edit_message
-    assert any("edit_message" == c["method"] for c in client.calls)
+    # Default flag True → delete_message + send_message
+    assert any("delete_message" == c["method"] for c in client.calls)
+    assert any("send_message" == c["method"] for c in client.calls)
 
 
 @pytest.mark.asyncio

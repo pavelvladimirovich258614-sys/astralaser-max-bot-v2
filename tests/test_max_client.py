@@ -175,21 +175,66 @@ async def test_send_message_without_attachments_omits_attachments(set_token):
 
 
 @pytest.mark.asyncio
-async def test_delete_message(set_token):
+async def test_delete_message(set_token, caplog):
     captured: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["method"] = request.method
         captured["url"] = str(request.url)
-        return httpx.Response(200)
+        return httpx.Response(200, json={"success": True})
 
     client = MAXClient(http_client=_make_transport(handler))
-    result = await client.delete_message(chat_id=42, message_id="msg_1")
+    with caplog.at_level("INFO"):
+        result = await client.delete_message(chat_id=42, message_id="msg_1")
     await client.close()
 
     assert result is True
     assert captured["method"] == "DELETE"
-    assert "/messages/msg_1" in captured["url"]
+    assert "/messages" in captured["url"]
+    assert "message_id=msg_1" in captured["url"]
+    assert "delete_message response status=200" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_delete_message_success_false_returns_false(set_token, caplog):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"success": False, "message": "reason"})
+
+    client = MAXClient(http_client=_make_transport(handler))
+    with caplog.at_level("WARNING"):
+        result = await client.delete_message(chat_id=42, message_id="msg_1")
+    await client.close()
+
+    assert result is False
+    assert "delete_message success=false" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_delete_message_success_true_returns_true(set_token, caplog):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"success": True})
+
+    client = MAXClient(http_client=_make_transport(handler))
+    with caplog.at_level("INFO"):
+        result = await client.delete_message(chat_id=42, message_id="msg_1")
+    await client.close()
+
+    assert result is True
+    assert "delete_message response status=200" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_delete_message_4xx_returns_false(set_token, caplog):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, text="Not Found")
+
+    client = MAXClient(http_client=_make_transport(handler))
+    with caplog.at_level("WARNING"):
+        result = await client.delete_message(chat_id=42, message_id="msg_1")
+    await client.close()
+
+    assert result is False
+    assert "delete_message failed" in caplog.text
 
 
 @pytest.mark.asyncio

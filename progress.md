@@ -4,11 +4,55 @@
 
 ## Current Verified State
 
-**Статус проекта:** F05 in_progress → диагностика серого фото при PUT /messages, эксперимент 1 запланирован
-**Текущая фича `in_progress`:** F05 — Каталог: категории, карточки, пагинация фото
-**Следующая фича по дорожной карте:** F06 — Корзина
-**Последний коммит:** `feat(F05): catalog + photo upload via /uploads (token-based) + seed completed`
-**Тесты:** 58 passed
+**Статус проекта:** F05 completed → F06 in_progress
+**Текущая фича `in_progress`:** F06 — Корзина
+**Следующая фича по дорожной карте:** F07 — Оформление заказа (FSM)
+**Последний коммит:** `feat(F05): complete catalog photo navigation workaround`
+**Тесты:** 66 passed
+
+---
+
+## Session Record — 2026-05-09 (F05 completed after live-test)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F05 — Каталог: категории, карточки, пагинация фото
+**Status:** completed → F06 opened
+
+### What was done
+
+**Proven workaround for MAX PUT /messages image attachment instability:**
+- MAX API нестабильно заменяет image attachment через `PUT /messages` (серое/пустое фото при пагинации, текст-колонка при возврате в меню).
+- Workaround: `delete_message` + `send_message` с `photo_url` для карточек товара и главного меню.
+- `delete_message` использует корректный endpoint `DELETE /messages?message_id=...`.
+- Флаг `USE_PHOTO_URL_IN_EDIT` переименован не был; дефолт изменён с `"0"` на `"1"`, так что workaround включён по умолчанию. Откат возможен через `USE_PHOTO_URL_IN_EDIT=0`.
+
+**Изменённые файлы:**
+- `src/bot/max_client.py`: `delete_message` endpoint fixed + detailed response logging (status + body + JSON success parsing).
+- `src/bot/handlers/catalog.py`: `show_product_card` — диагностические логи old_message_id/product_id/photo_index/deleted/new_message_id; workaround включён по умолчанию.
+- `src/bot/handlers/start.py`: `show_main_menu` — workaround включён по умолчанию.
+- `tests/test_max_client.py`: 3 новых теста на `delete_message` (success false/true, 4xx).
+- `tests/test_catalog.py`: тесты на delete+send при флаге True, на edit_message при флаге False, на send даже при delete=False.
+- `tests/test_router.py`: FakeClient получил `delete_message`; тесты `prod_id` и `photo_id_idx` теперь мокают `get_product_card` и проверяют delete+send.
+
+### Evidence
+
+- pytest: 66 passed ✅
+- ruff: exit 0 ✅
+- mypy: только pre-existing webhook.py:23 ✅
+- Live-test MAX: пагинация фото работает корректно, карточки подменяются без серых блоков, кнопка 🏠 Главная из карточки работает, 🔙 К категории возвращает чистый список.
+
+### Technical decision
+
+MAX нестабильно заменяет image attachment через `PUT /messages`. Для карточек товара и возврата в главное меню используется workaround `delete_message` + `send_message`. `delete_message` → `DELETE /messages?message_id=...`. Proven flag `USE_PHOTO_URL_IN_EDIT` по умолчанию включён (`"1"`); откат возможен через `USE_PHOTO_URL_IN_EDIT=0`.
+
+### Notes / follow-ups
+
+- Главное меню при возврате через кнопку «🏠 Главная» рендерится корректно (workaround delete+send).
+- webhook.py:23 — pre-existing mypy warning, переносится в F06/F11.
+
+### Next best action
+
+1. Открыть F06 — Корзина.
 
 ---
 

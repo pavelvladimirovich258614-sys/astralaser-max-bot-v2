@@ -111,6 +111,7 @@ async def test_show_category_single_product_shows_product_list(monkeypatch, asyn
 @pytest.mark.asyncio
 async def test_show_product_card_short_description(monkeypatch):
     """Карточка показывает только заголовок, цену и первую строку описания."""
+    monkeypatch.setattr(catalog_handler, "_USE_PHOTO_URL_IN_EDIT", False)
 
     class RecordingClient:
         def __init__(self):
@@ -164,3 +165,198 @@ async def test_show_product_card_short_description(monkeypatch):
     assert "✨ Особенности" not in call["text"]
     assert "Срок" not in call["text"]
     assert "Доставка" not in call["text"]
+
+
+@pytest.mark.asyncio
+async def test_show_product_card_uses_photo_url_when_flag_enabled(monkeypatch):
+    """При USE_PHOTO_URL_IN_EDIT=1 delete_message + send_message с photo_url и полным описанием."""
+    monkeypatch.setattr(catalog_handler, "_USE_PHOTO_URL_IN_EDIT", True)
+
+    class RecordingClient:
+        def __init__(self):
+            self.delete_calls = []
+            self.send_calls = []
+            self.edit_calls = []
+
+        async def delete_message(self, chat_id, message_id):
+            self.delete_calls.append({"chat_id": chat_id, "message_id": message_id})
+            return True
+
+        async def send_message(self, chat_id, text, reply_markup=None, photo_url=None, photo=None):
+            self.send_calls.append(
+                {
+                    "chat_id": chat_id,
+                    "text": text,
+                    "reply_markup": reply_markup,
+                    "photo_url": photo_url,
+                    "photo": photo,
+                }
+            )
+
+        async def edit_message(self, chat_id, message_id, text, reply_markup=None, photo_url=None, photo=None):
+            self.edit_calls.append(
+                {
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "text": text,
+                    "reply_markup": reply_markup,
+                    "photo_url": photo_url,
+                    "photo": photo,
+                }
+            )
+
+    full_desc = (
+        "Открывающийся кулон с секретным посланием внутри.\n"
+        "Идеальный подарок.\n\n"
+        "✨ Особенности:\n"
+        "- Гравировка всех 4 граней\n\n"
+        "⏱ Срок изготовления: 1–2 рабочих дня\n"
+        "📦 Доставка только СДЭК\n"
+        "💝 Макет и гравировка — бесплатно"
+    )
+
+    async def mock_get_product_card(session, product_id, photo_index=0):
+        return ProductCardDTO(
+            title="Кулон-столбик",
+            price=840,
+            description=full_desc,
+            photo_url="https://example.com/photo.webp",
+            photo={"token": "abc123"},
+            photo_count=3,
+            photo_index=0,
+            category_slug="kole-i-kulony",
+        )
+
+    monkeypatch.setattr(catalog_service, "get_product_card", mock_get_product_card)
+
+    client = RecordingClient()
+    await catalog_handler.show_product_card(client, chat_id=1, message_id="msg_1", product_id=1)
+
+    assert len(client.delete_calls) == 1
+    assert client.delete_calls[0]["message_id"] == "msg_1"
+
+    assert len(client.send_calls) == 1
+    call = client.send_calls[0]
+    assert call["photo_url"] == "https://example.com/photo.webp"
+    assert call["photo"] is None
+    assert call["reply_markup"] is not None
+    assert "✨ Особенности" in call["text"]
+    assert "Срок изготовления" in call["text"]
+    assert "Доставка только СДЭК" in call["text"]
+
+    assert len(client.edit_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_show_product_card_delete_false_still_sends(monkeypatch):
+    """Даже если delete_message вернул False, send_message всё равно вызывается."""
+    monkeypatch.setattr(catalog_handler, "_USE_PHOTO_URL_IN_EDIT", True)
+
+    class RecordingClient:
+        def __init__(self):
+            self.delete_calls = []
+            self.send_calls = []
+            self.edit_calls = []
+
+        async def delete_message(self, chat_id, message_id):
+            self.delete_calls.append({"chat_id": chat_id, "message_id": message_id})
+            return False
+
+        async def send_message(self, chat_id, text, reply_markup=None, photo_url=None, photo=None):
+            self.send_calls.append(
+                {
+                    "chat_id": chat_id,
+                    "text": text,
+                    "reply_markup": reply_markup,
+                    "photo_url": photo_url,
+                    "photo": photo,
+                }
+            )
+
+        async def edit_message(self, chat_id, message_id, text, reply_markup=None, photo_url=None, photo=None):
+            self.edit_calls.append(
+                {
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "text": text,
+                    "reply_markup": reply_markup,
+                    "photo_url": photo_url,
+                    "photo": photo,
+                }
+            )
+
+    async def mock_get_product_card(session, product_id, photo_index=0):
+        return ProductCardDTO(
+            title="Кулон-столбик",
+            price=840,
+            description="Desc",
+            photo_url="https://example.com/photo.webp",
+            photo=None,
+            photo_count=3,
+            photo_index=0,
+            category_slug="kole-i-kulony",
+        )
+
+    monkeypatch.setattr(catalog_service, "get_product_card", mock_get_product_card)
+
+    client = RecordingClient()
+    await catalog_handler.show_product_card(client, chat_id=1, message_id="msg_1", product_id=1)
+
+    assert len(client.delete_calls) == 1
+    assert len(client.send_calls) == 1
+    assert len(client.edit_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_show_product_card_uses_short_description_when_flag_disabled(monkeypatch):
+    """При USE_PHOTO_URL_IN_EDIT=0 описание сокращается через _short_description."""
+    monkeypatch.setattr(catalog_handler, "_USE_PHOTO_URL_IN_EDIT", False)
+
+    class RecordingClient:
+        def __init__(self):
+            self.calls = []
+
+        async def edit_message(self, chat_id, message_id, text, reply_markup=None, photo_url=None, photo=None):
+            self.calls.append(
+                {
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "text": text,
+                    "reply_markup": reply_markup,
+                    "photo_url": photo_url,
+                    "photo": photo,
+                }
+            )
+
+    full_desc = (
+        "Открывающийся кулон с секретным посланием внутри.\n"
+        "Идеальный подарок.\n\n"
+        "✨ Особенности:\n"
+        "- Гравировка всех 4 граней\n\n"
+        "⏱ Срок изготовления: 1–2 рабочих дня\n"
+        "📦 Доставка только СДЭК"
+    )
+
+    async def mock_get_product_card(session, product_id, photo_index=0):
+        return ProductCardDTO(
+            title="Кулон-столбик",
+            price=840,
+            description=full_desc,
+            photo_url="https://example.com/photo.webp",
+            photo={"token": "abc123"},
+            photo_count=3,
+            photo_index=0,
+            category_slug="kole-i-kulony",
+        )
+
+    monkeypatch.setattr(catalog_service, "get_product_card", mock_get_product_card)
+
+    client = RecordingClient()
+    await catalog_handler.show_product_card(client, chat_id=1, message_id="msg_1", product_id=1)
+
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert "✨ Особенности" not in call["text"]
+    assert "Срок изготовления" not in call["text"]
+    assert "Доставка только СДЭК" not in call["text"]
+    assert call["photo"] == {"token": "abc123"}

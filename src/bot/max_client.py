@@ -122,15 +122,28 @@ class MAXClient:
             return {}
 
     async def delete_message(self, chat_id: int | str, message_id: str) -> bool:
+        logger.info("delete_message request message_id=%s chat_id=%s", message_id, chat_id)
         try:
             r = await self._client.delete(
-                f"/messages/{message_id}",
-                params={"chat_id": chat_id},
+                "/messages",
+                params={"message_id": message_id},
             )
+            body = r.text
+            logger.info("delete_message response status=%s body=%s", r.status_code, body)
             r.raise_for_status()
+            try:
+                data = r.json()
+            except Exception:
+                logger.info("delete_message non-JSON success body=%s", body)
+                return True
+            if isinstance(data, dict) and "success" in data:
+                if data["success"] is False:
+                    logger.warning("delete_message success=false body=%s", body)
+                    return False
+                return True
             return True
         except httpx.HTTPStatusError as e:
-            logger.warning("delete_message failed: status=%s", e.response.status_code)
+            logger.warning("delete_message failed: status=%s body=%s", e.response.status_code, e.response.text)
             return False
 
     async def answer_callback_query(
