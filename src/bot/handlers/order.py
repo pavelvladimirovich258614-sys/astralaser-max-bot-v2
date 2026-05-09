@@ -8,6 +8,7 @@ from src.bot.keyboards import (
     empty_cart_keyboard,
     order_cancel_keyboard,
     order_ready_keyboard,
+    order_summary_keyboard,
 )
 from src.bot.max_client import MAXClient
 from src.db.engine import async_session_maker
@@ -79,6 +80,52 @@ async def cancel_checkout(
         await session.commit()
 
     await cart_handler.show_cart(client, chat_id, user_id, message_id)
+
+
+async def show_order_summary(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None = None,
+) -> None:
+    """Показать summary заказа перед созданием."""
+    async with async_session_maker() as session:
+        user = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        state, data = await fsm_service.get_state(session, user.id)
+        cart_view = await cart_service.get_cart_view(session, user.id)
+
+        if not cart_view.items:
+            text = "🛒 Корзина пуста.\n\nВы можете перейти в каталог и выбрать изделие с гравировкой."
+            keyboard = empty_cart_keyboard()
+        elif state != fsm_service.ORDER_READY_CONFIRM:
+            text = (
+                "⚠️ Данные заказа ещё не заполнены.\n\n"
+                "Начните оформление заново из корзины."
+            )
+            keyboard = empty_cart_keyboard()
+        else:
+            lines = ["📋 Проверьте заказ\n"]
+            lines.append("Товары:")
+            for idx, item in enumerate(cart_view.items, 1):
+                lines.append(f"{idx}. {item.title}")
+                lines.append(f"{item.price} ₽ × {item.quantity} = {item.line_total} ₽")
+                lines.append("")
+            lines.append(f"Итого: {cart_view.total} ₽\n")
+            lines.append("Данные клиента:")
+            lines.append(f"👤 ФИО: {data.get('customer_name', '—')}")
+            lines.append(f"📞 Телефон: {data.get('phone', '—')}")
+            lines.append(f"📍 Доставка: {data.get('address', '—')}")
+            lines.append(f"✏️ Гравировка/комментарий: {data.get('notes', '—')}")
+            lines.append("")
+            lines.append("Проверьте данные перед подтверждением.")
+            text = "\n".join(lines)
+            keyboard = order_summary_keyboard()
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)
 
 
 async def handle_fsm_message(

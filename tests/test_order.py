@@ -368,3 +368,187 @@ async def test_delete_message_failure_does_not_break_fsm(db_session):
     async with order_handler.async_session_maker() as fresh:
         state, _ = await fsm_service.get_state(fresh, user.id)
     assert state == "order:waiting_phone"
+
+
+# ---------------------------------------------------------------------------
+# F07.3 — Summary заказа
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_show_order_summary_with_ready_state_shows_cart_items(db_session):
+    """При state order:ready_confirm summary содержит товары из корзины."""
+    user = User(max_user_id="800", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+    product = Product(category_id=1, title="P1", description="D", price=100, cover_url="url")
+    db_session.add(product)
+    await db_session.flush()
+    cart = CartItem(user_id=user.id, product_id=product.id, quantity=2)
+    db_session.add(cart)
+    await db_session.commit()
+
+    await fsm_service.set_state(
+        db_session, user.id, "order:ready_confirm",
+        {"customer_name": "Иван", "phone": "+7", "address": "Москва", "notes": "Гравировка"}
+    )
+
+    client = RecordingClient()
+    await order_handler.show_order_summary(client, chat_id=1, user_id="800", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert call["method"] == "edit_message"
+    assert "P1" in call["text"]
+    assert "200 ₽" in call["text"]  # 100 × 2
+
+
+@pytest.mark.asyncio
+async def test_show_order_summary_shows_customer_data(db_session):
+    """Summary содержит ФИО, телефон, адрес, notes."""
+    user = User(max_user_id="801", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+    product = Product(category_id=1, title="P", description="D", price=100, cover_url="url")
+    db_session.add(product)
+    await db_session.flush()
+    cart = CartItem(user_id=user.id, product_id=product.id, quantity=1)
+    db_session.add(cart)
+    await db_session.commit()
+
+    await fsm_service.set_state(
+        db_session, user.id, "order:ready_confirm",
+        {"customer_name": "Иван Иванов", "phone": "+7 999", "address": "Москва", "notes": "Гравировка"}
+    )
+
+    client = RecordingClient()
+    await order_handler.show_order_summary(client, chat_id=1, user_id="801", message_id="msg_1")
+
+    call = client.calls[0]
+    assert "Иван Иванов" in call["text"]
+    assert "+7 999" in call["text"]
+    assert "Москва" in call["text"]
+    assert "Гравировка" in call["text"]
+
+
+@pytest.mark.asyncio
+async def test_show_order_summary_shows_total(db_session):
+    """Summary содержит итог."""
+    user = User(max_user_id="802", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+    product = Product(category_id=1, title="P", description="D", price=250, cover_url="url")
+    db_session.add(product)
+    await db_session.flush()
+    cart = CartItem(user_id=user.id, product_id=product.id, quantity=3)
+    db_session.add(cart)
+    await db_session.commit()
+
+    await fsm_service.set_state(
+        db_session, user.id, "order:ready_confirm",
+        {"customer_name": "Иван", "phone": "+7", "address": "М", "notes": "N"}
+    )
+
+    client = RecordingClient()
+    await order_handler.show_order_summary(client, chat_id=1, user_id="802", message_id="msg_1")
+
+    call = client.calls[0]
+    assert "Итого: 750 ₽" in call["text"]
+
+
+@pytest.mark.asyncio
+async def test_show_order_summary_uses_edit_message_when_message_id(db_session):
+    """При message_id используется edit_message."""
+    user = User(max_user_id="803", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+    product = Product(category_id=1, title="P", description="D", price=100, cover_url="url")
+    db_session.add(product)
+    await db_session.flush()
+    cart = CartItem(user_id=user.id, product_id=product.id, quantity=1)
+    db_session.add(cart)
+    await db_session.commit()
+
+    await fsm_service.set_state(
+        db_session, user.id, "order:ready_confirm",
+        {"customer_name": "Иван", "phone": "+7", "address": "М", "notes": "N"}
+    )
+
+    client = RecordingClient()
+    await order_handler.show_order_summary(client, chat_id=1, user_id="803", message_id="msg_1")
+    assert client.calls[0]["method"] == "edit_message"
+
+
+@pytest.mark.asyncio
+async def test_show_order_summary_empty_cart_returns_cart(db_session):
+    """Если корзина пустая, показывается пустая корзина."""
+    user = User(max_user_id="804", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(
+        db_session, user.id, "order:ready_confirm",
+        {"customer_name": "Иван", "phone": "+7", "address": "М", "notes": "N"}
+    )
+
+    client = RecordingClient()
+    await order_handler.show_order_summary(client, chat_id=1, user_id="804", message_id="msg_1")
+
+    call = client.calls[0]
+    assert "Корзина пуста" in call["text"]
+
+
+@pytest.mark.asyncio
+async def test_show_order_summary_wrong_state_shows_warning(db_session):
+    """Если state не ready_confirm, показывается предупреждение."""
+    user = User(max_user_id="805", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+    product = Product(category_id=1, title="P", description="D", price=100, cover_url="url")
+    db_session.add(product)
+    await db_session.flush()
+    cart = CartItem(user_id=user.id, product_id=product.id, quantity=1)
+    db_session.add(cart)
+    await db_session.commit()
+
+    await fsm_service.set_waiting_name(db_session, user.id)
+
+    client = RecordingClient()
+    await order_handler.show_order_summary(client, chat_id=1, user_id="805", message_id="msg_1")
+
+    call = client.calls[0]
+    assert "Данные заказа ещё не заполнены" in call["text"]
+
+
+@pytest.mark.asyncio
+async def test_order_summary_keyboard_has_confirm_and_cancel():
+    """Клавиатура содержит order:confirm и order:cancel."""
+    from src.bot.keyboards import order_summary_keyboard
+    kb = order_summary_keyboard()
+    payloads = [b["payload"] for row in kb for b in row]
+    assert "order:confirm" in payloads
+    assert "order:cancel" in payloads
+
+
+@pytest.mark.asyncio
+async def test_show_order_summary_does_not_create_order(db_session):
+    """Убедиться, что Order не создаётся в F07.3."""
+    user = User(max_user_id="806", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+    product = Product(category_id=1, title="P", description="D", price=100, cover_url="url")
+    db_session.add(product)
+    await db_session.flush()
+    cart = CartItem(user_id=user.id, product_id=product.id, quantity=1)
+    db_session.add(cart)
+    await db_session.commit()
+
+    await fsm_service.set_state(
+        db_session, user.id, "order:ready_confirm",
+        {"customer_name": "Иван", "phone": "+7", "address": "М", "notes": "N"}
+    )
+
+    client = RecordingClient()
+    await order_handler.show_order_summary(client, chat_id=1, user_id="806", message_id="msg_1")
+
+    from src.db.crud import order as order_crud
+    order = await order_crud.get_by_id(db_session, 1)
+    assert order is None

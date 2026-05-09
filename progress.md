@@ -166,6 +166,44 @@ F06 декомпозирована на 4 staged-подфичи внутри о�
 
 ---
 
+## Session Record — 2026-05-09 (F07.3 completed after live-test)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F07.3 — Экран подтверждения заказа
+**Status:** completed inside parent F07
+
+### What was done
+
+- Добавлена `order_summary_keyboard` в `src/bot/keyboards.py`.
+- Добавлена кнопка ✅ Подтвердить заказ с payload `order:confirm`.
+- Добавлена кнопка ❌ Отменить оформление с payload `order:cancel`.
+- Добавлен `order_handler.show_order_summary`.
+- Callback `order:summary` подключён в `router.py`.
+- Summary показывает товары из корзины, количество, цену, сумму по позиции и общий итог.
+- Summary показывает данные клиента из `UserState.data`: ФИО, телефон, адрес, текст гравировки/комментарий.
+- Если корзина пустая, summary возвращает экран пустой корзины.
+- Если state не `order:ready_confirm`, summary показывает предупреждение, что данные заказа ещё не заполнены.
+- `order:confirm` НЕ подключён к созданию заказа.
+- Order и OrderItem не создавались.
+- Корзина после summary не очищалась.
+- Уведомления менеджерам не отправлялись.
+
+### Evidence
+
+- pytest: 125 passed, 2 warnings
+- ruff: exit 0
+- mypy: `Success: no issues found in 30 source files`
+- live-test MAX:
+  - Кнопка 📋 Перейти к подтверждению открыла summary.
+  - Товары, итог, ФИО, телефон, адрес и гравировка отображаются правильно.
+  - ❌ Отменить оформление возвращает в корзину.
+
+### Next best action
+
+Начать F07.4 — Создание заказа и очистка корзины. Реализовать callback `order:confirm`: создать Order и OrderItem из текущей корзины со snapshot названий и цен, очистить корзину, очистить UserState, показать пользователю подтверждение с номером заказа. Не отправлять уведомления менеджерам до F07.5.
+
+---
+
 ## Session Record — 2026-05-09 (F07.2 completed after live-test)
 
 **Agent:** Kimi K2.6 (OpenCode)

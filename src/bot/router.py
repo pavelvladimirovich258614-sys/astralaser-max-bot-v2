@@ -129,6 +129,10 @@ class UpdateRouter:
             await order_handler.cancel_checkout(self.client, chat_id, user_id, message_id)
             return
 
+        if data == "order:summary":
+            await order_handler.show_order_summary(self.client, chat_id, user_id, message_id)
+            return
+
         if data == "clear":
             await cart_handler.confirm_clear_cart(self.client, chat_id, user_id, message_id)
             return

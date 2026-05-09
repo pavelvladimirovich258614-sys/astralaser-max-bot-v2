@@ -10,7 +10,7 @@ from src.bot.handlers import cart as cart_handler
 from src.bot.handlers import catalog as catalog_handler
 from src.bot.handlers import order as order_handler
 from src.bot.router import UpdateRouter
-from src.db.models import Base, User
+from src.db.models import Base, CartItem, Product, User
 from src.services import catalog_service, fsm_service
 from src.services.catalog_service import ProductCardDTO
 
@@ -111,12 +111,12 @@ def router(set_token):
     return UpdateRouter(client), client
 
 
-def _make_callback_payload(payload: str) -> dict[str, Any]:
+def _make_callback_payload(payload: str, user_id: str = "123") -> dict[str, Any]:
     return {
         "update_type": "message_callback",
         "callback": {
             "callback_id": "cb_1",
-            "user": {"user_id": "123"},
+            "user": {"user_id": user_id},
             "payload": payload,
         },
         "message": {
@@ -400,3 +400,37 @@ async def test_router_message_fsm_ignores_regular_command_routing(router, async_
     await r.process(_make_message_payload("/catalog", user_id="801"))
     # В FSM-state текст /catalog должен обрабатываться как FSM (имя), а не как команда
     assert any("Пожалуйста, напишите ФИО полностью" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_order_summary_routes_to_order_handler(router, async_engine):
+    r, client = router
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        user = User(max_user_id="802", full_name="Test")
+        session.add(user)
+        await session.flush()
+        product = Product(category_id=1, title="P", description="D", price=100, cover_url="url")
+        session.add(product)
+        await session.flush()
+        cart = CartItem(user_id=user.id, product_id=product.id, quantity=1)
+        session.add(cart)
+        await session.commit()
+        await fsm_service.set_state(
+            session, user.id, "order:ready_confirm",
+            {"customer_name": "Иван", "phone": "+7", "address": "М", "notes": "N"}
+        )
+
+    await r.process(_make_callback_payload("order:summary", user_id="802"))
+    assert any("Проверьте заказ" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_order_confirm_not_routed_yet(router):
+    r, client = router
+    await r.process(_make_callback_payload("order:confirm"))
+    # F07.4 ещё не реализована — order:confirm не должен вызывать order handler
+    assert not any(c.get("method") == "send_message" and "заказ" in c.get("text", "") for c in client.calls)

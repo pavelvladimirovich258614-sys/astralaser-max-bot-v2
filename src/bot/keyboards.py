@@ -125,3 +125,11 @@ def order_ready_keyboard() -> list[list[dict[str, Any]]]:
         [{"type": "callback", "text": "📋 Перейти к подтверждению", "payload": "order:summary"}],
         [{"type": "callback", "text": "❌ Отменить оформление", "payload": "order:cancel"}],
     ]
+
+
+def order_summary_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура экрана подтверждения заказа."""
+    return [
+        [{"type": "callback", "text": "✅ Подтвердить заказ", "payload": "order:confirm"}],
+        [{"type": "callback", "text": "❌ Отменить оформление", "payload": "order:cancel"}],
+    ]
