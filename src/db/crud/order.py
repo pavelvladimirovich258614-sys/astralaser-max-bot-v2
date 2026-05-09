@@ -2,6 +2,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.db.models import Order, OrderItem
 
@@ -43,7 +44,9 @@ async def create_order(
 
 
 async def get_by_id(session: AsyncSession, order_id: int) -> Order | None:
-    result = await session.execute(select(Order).where(Order.id == order_id))
+    result = await session.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.items))
+    )
     return result.scalar_one_or_none()
 
 

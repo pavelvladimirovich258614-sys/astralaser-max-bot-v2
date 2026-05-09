@@ -4,11 +4,54 @@
 
 ## Current Verified State
 
-**Статус проекта:** F06 completed → F07 in_progress
+**Статус проекта:** F07 in_progress (F07.4 completed)
 **Текущая фича `in_progress`:** F07 — Оформление заказа (FSM)
-**Следующая фича по дорожной карте:** F08 — Менеджер и помощь
-**Последний коммит:** `feat(F06): add checkout transition and complete cart`
-**Тесты:** 95 passed
+**Следующий этап:** F07.5 — Уведомления менеджерам
+**Последний коммит:** `feat(F07): create order and clear cart on confirm`
+**Тесты:** 133 passed
+
+---
+
+## Session Record — 2026-05-09 (F07.4 completed after live-test)
+
+**Agent:** GLM-5.1 (Z.AI Coding Plan / OpenCode)
+**Feature:** F07.4 — Создание заказа и очистка корзины
+**Status:** completed inside parent F07
+
+### What was done
+
+- Создан `src/services/order_service.py`: `create_order_from_cart()` — маппит `CartViewDTO` в `order_crud.create_order` со snapshot названий и цен.
+- Добавлен `confirm_order()` в `src/bot/handlers/order.py`: создаёт Order + OrderItem, очищает корзину, очищает UserState, показывает подтверждение с номером заказа.
+- Подключён callback `order:confirm` в `src/bot/router.py`.
+- Добавлена `order_confirmed_keyboard()` в `src/bot/keyboards.py` (одна кнопка 🏠 Главная).
+- `src/db/crud/order.py`: `get_by_id` использует `selectinload(Order.items)` для избежания DetachedInstanceError.
+- 8 новых тестов в `tests/test_order.py`: создание заказа, snapshots, очистка корзины, очистка state, подтверждение с номером, пустая корзина, неверный state, отсутствие уведомлений менеджерам.
+- 1 обновлённый тест в `tests/test_router.py`: `order:confirm` теперь роутится корректно.
+
+### Evidence
+
+- pytest: 133 passed ✅
+- ruff: exit 0 ✅
+- mypy: `Success: no issues found in 31 source files` ✅
+- init.ps1: Architecture OK, full checks passed ✅
+- live-test MAX:
+  - Заказ #1 оформлен ✅
+  - Итоговая сумма: 940 ₽ ✅
+  - Корзина после подтверждения пустая ✅
+  - Кнопка 🏠 Главная работает ✅
+  - Уведомления менеджерам не отправлялись (F07.5) ✅
+
+### Known follow-up
+
+MAX возвращает 403 `access.denied` при попытке `delete_message` для пользовательских текстовых сообщений FSM. Это не блокирует оформление заказа — best-effort deletion логирует warning и продолжает. Возможный рефакторинг: убрать `delete_message` для user messages или понизить уровень лога. Не входит в текущую фичу.
+
+### Branch before finalization
+
+`rescue/f07-4-interrupted-wip` (WIP-коммит `f2a8656` пересобран в финальный `feat(F07): create order and clear cart on confirm`)
+
+### Next best action
+
+Начать F07.5 — Уведомления менеджерам. Отправка сообщения всем admin IDs из `MAX_ADMIN_USER_IDS` через `send_message`. Уведомление содержит ID заказа, товары, итог, ФИО, телефон, адрес, гравировку/комментарий. Не использовать телефон менеджера как адресат.
 
 ---
 

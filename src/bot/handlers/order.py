@@ -7,12 +7,13 @@ from src.bot.handlers import cart as cart_handler
 from src.bot.keyboards import (
     empty_cart_keyboard,
     order_cancel_keyboard,
+    order_confirmed_keyboard,
     order_ready_keyboard,
     order_summary_keyboard,
 )
 from src.bot.max_client import MAXClient
 from src.db.engine import async_session_maker
-from src.services import cart_service, fsm_service, user_service
+from src.services import cart_service, fsm_service, order_service, user_service
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,56 @@ async def show_order_summary(
             lines.append("Проверьте данные перед подтверждением.")
             text = "\n".join(lines)
             keyboard = order_summary_keyboard()
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)
+
+
+async def confirm_order(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None = None,
+) -> None:
+    """Подтвердить заказ: создать Order, очистить корзину и state."""
+    async with async_session_maker() as session:
+        user = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        state, data = await fsm_service.get_state(session, user.id)
+        cart_view = await cart_service.get_cart_view(session, user.id)
+
+        if not cart_view.items:
+            text = "🛒 Корзина пуста.\n\nВы можете перейти в каталог и выбрать изделие с гравировкой."
+            keyboard = empty_cart_keyboard()
+        elif state != fsm_service.ORDER_READY_CONFIRM:
+            text = (
+                "⚠️ Данные заказа ещё не заполнены.\n\n"
+                "Начните оформление заново из корзины."
+            )
+            keyboard = empty_cart_keyboard()
+        else:
+            order = await order_service.create_order_from_cart(
+                session=session,
+                user_id=user.id,
+                customer_name=data.get("customer_name", ""),
+                customer_phone=data.get("phone", ""),
+                delivery_address=data.get("address", ""),
+                notes=data.get("notes"),
+                cart_view=cart_view,
+            )
+            await cart_service.clear_cart(session, user.id)
+            await fsm_service.clear_state(session, user.id)
+            await session.commit()
+
+            text = (
+                f"✅ Заказ оформлен!\n\n"
+                f"Номер заказа: #{order.id}\n"
+                f"Итого: {order.total_amount} ₽\n\n"
+                f"Мы получили ваши данные и скоро свяжемся для согласования деталей."
+            )
+            keyboard = order_confirmed_keyboard()
 
     if message_id:
         await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)

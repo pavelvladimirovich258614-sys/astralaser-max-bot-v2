@@ -429,8 +429,26 @@ async def test_router_callback_order_summary_routes_to_order_handler(router, asy
 
 
 @pytest.mark.asyncio
-async def test_router_callback_order_confirm_not_routed_yet(router):
+async def test_router_callback_order_confirm_routes_to_order_handler(router, async_engine):
     r, client = router
-    await r.process(_make_callback_payload("order:confirm"))
-    # F07.4 ещё не реализована — order:confirm не должен вызывать order handler
-    assert not any(c.get("method") == "send_message" and "заказ" in c.get("text", "") for c in client.calls)
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        user = User(max_user_id="803", full_name="Test")
+        session.add(user)
+        await session.flush()
+        product = Product(category_id=1, title="P", description="D", price=100, cover_url="url")
+        session.add(product)
+        await session.flush()
+        cart = CartItem(user_id=user.id, product_id=product.id, quantity=1)
+        session.add(cart)
+        await session.commit()
+        await fsm_service.set_state(
+            session, user.id, "order:ready_confirm",
+            {"customer_name": "Иван", "phone": "+7", "address": "М", "notes": "N"}
+        )
+
+    await r.process(_make_callback_payload("order:confirm", user_id="803"))
+    assert any("Заказ оформлен" in c.get("text", "") for c in client.calls)
