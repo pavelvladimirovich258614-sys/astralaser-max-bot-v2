@@ -5,6 +5,7 @@ import time
 from collections import OrderedDict
 from typing import Any
 
+from src.bot.handlers import cart as cart_handler
 from src.bot.handlers import catalog as catalog_handler
 from src.bot.handlers import start as start_handler
 from src.bot.max_client import MAXClient
@@ -46,6 +47,8 @@ class UpdateRouter:
             await start_handler.handle_start(self.client, chat_id, user_id, user)
         elif text.startswith("/catalog"):
             await catalog_handler.show_catalog(self.client, chat_id)
+        elif text.startswith("/cart"):
+            await cart_handler.show_cart(self.client, chat_id, user_id)
 
     async def _handle_callback(self, payload: dict[str, Any]) -> None:
         cb = payload.get("callback", {})
@@ -87,10 +90,13 @@ class UpdateRouter:
             await start_handler.show_main_menu(self.client, chat_id, message_id)
             return
 
+        if data == "menu:cart":
+            await cart_handler.show_cart(self.client, chat_id, user_id, message_id)
+            return
+
         # Заглушки для не реализованных разделов главного меню
-        if data in ("menu:cart", "menu:orders", "menu:help", "menu:contact"):
+        if data in ("menu:orders", "menu:help", "menu:contact"):
             stub_text = {
-                "menu:cart": "🛒 Корзина — скоро.",
                 "menu:orders": "📦 Мои заказы — скоро.",
                 "menu:help": "❓ Помощь — скоро.",
                 "menu:contact": "💬 Менеджер — скоро.",

@@ -64,3 +64,19 @@ def added_to_cart_keyboard(product_id: int) -> list[list[dict[str, Any]]]:
         [{"type": "callback", "text": "🔙 К товару", "payload": f"prod:{product_id}"}],
         [{"type": "callback", "text": "🏠 Главная", "payload": "home"}],
     ]
+
+
+def empty_cart_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура для пустой корзины."""
+    return [
+        [{"type": "callback", "text": "📚 В каталог", "payload": "menu:catalog"}],
+        [{"type": "callback", "text": "🏠 Главная", "payload": "home"}],
+    ]
+
+
+def cart_view_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура для экрана корзины (F06.2: только каталог и главная)."""
+    return [
+        [{"type": "callback", "text": "📚 В каталог", "payload": "menu:catalog"}],
+        [{"type": "callback", "text": "🏠 Главная", "payload": "home"}],
+    ]

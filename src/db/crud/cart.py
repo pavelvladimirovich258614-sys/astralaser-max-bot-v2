@@ -1,11 +1,20 @@
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.db.models import CartItem
 
 
 async def get_user_cart(session: AsyncSession, user_id: int) -> list[CartItem]:
     result = await session.execute(select(CartItem).where(CartItem.user_id == user_id))
+    return list(result.scalars().all())
+
+
+async def get_user_cart_with_products(session: AsyncSession, user_id: int) -> list[CartItem]:
+    """Корзина пользователя с eager-load товаров (для async-контекста)."""
+    result = await session.execute(
+        select(CartItem).where(CartItem.user_id == user_id).options(selectinload(CartItem.product))
+    )
     return list(result.scalars().all())
 
 

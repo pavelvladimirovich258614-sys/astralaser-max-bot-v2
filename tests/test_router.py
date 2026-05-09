@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from src.bot.handlers import cart as cart_handler
 from src.bot.handlers import catalog as catalog_handler
 from src.bot.router import UpdateRouter
 from src.db.models import Base
@@ -60,6 +61,20 @@ async def override_catalog_session_maker(monkeypatch, async_engine):
         await conn.run_sync(Base.metadata.drop_all)
 
 
+@pytest.fixture(autouse=True)
+async def override_cart_session_maker(monkeypatch, async_engine):
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(cart_handler, "async_session_maker", test_session_maker)
+
+    yield
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+
 @pytest.fixture
 def router(set_token):
     client = FakeClient()
@@ -105,10 +120,10 @@ async def test_router_callback_home(router):
 
 
 @pytest.mark.asyncio
-async def test_router_callback_stub_menu_cart(router):
+async def test_router_callback_menu_cart(router):
     r, client = router
     await r.process(_make_callback_payload("menu:cart"))
-    assert any(c.get("text") == "🛒 Корзина — скоро." for c in client.calls)
+    assert any("Корзина пуста" in c.get("text", "") for c in client.calls)
 
 
 @pytest.mark.asyncio
@@ -191,13 +206,29 @@ async def test_router_message_catalog_command(router):
 
 
 @pytest.mark.asyncio
+async def test_router_message_cart_command(router):
+    r, client = router
+    payload = {
+        "update_type": "message_created",
+        "message": {
+            "recipient": {"chat_id": "456"},
+            "sender": {"user_id": "123"},
+            "body": {"text": "/cart"},
+        },
+    }
+    await r.process(payload)
+    assert any("send_message" == c["method"] for c in client.calls)
+    assert any("Корзина пуста" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
 async def test_router_duplicate_callback_ignored(router):
     r, client = router
-    payload = _make_callback_payload("menu:cart")
+    payload = _make_callback_payload("menu:orders")
     await r.process(payload)
     await r.process(payload)
-    cart_calls = [c for c in client.calls if c.get("text") == "🛒 Корзина — скоро."]
-    assert len(cart_calls) == 1
+    orders_calls = [c for c in client.calls if c.get("text") == "📦 Мои заказы — скоро."]
+    assert len(orders_calls) == 1
 
 
 @pytest.mark.asyncio
@@ -224,9 +255,9 @@ async def test_router_duplicate_after_ttl_allowed(router, monkeypatch):
         return call_times[-1] + 1.0
 
     monkeypatch.setattr("src.bot.router.time.monotonic", fake_monotonic)
-    payload = _make_callback_payload("menu:cart")
+    payload = _make_callback_payload("menu:orders")
     await r.process(payload)
     await r.process(payload)
     await r.process(payload)
-    cart_calls = [c for c in client.calls if c.get("text") == "🛒 Корзина — скоро."]
-    assert len(cart_calls) == 2
+    orders_calls = [c for c in client.calls if c.get("text") == "📦 Мои заказы — скоро."]
+    assert len(orders_calls) == 2

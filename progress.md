@@ -4,11 +4,11 @@
 
 ## Current Verified State
 
-**Статус проекта:** F05 completed → F06 in_progress (F06.1 completed)
+**Статус проекта:** F05 completed → F06 in_progress (F06.1 completed, F06.2 completed)
 **Текущая фича `in_progress`:** F06 — Корзина
 **Следующая фича по дорожной карте:** F07 — Оформление заказа (FSM)
-**Последний коммит:** `feat(F06): add cart confirmation flow`
-**Тесты:** 68 passed
+**Последний коммит:** `feat(F06): add cart view`
+**Тесты:** 73 passed
 
 ---
 
@@ -69,6 +69,37 @@ F06 декомпозирована на 4 staged-подфичи внутри о�
 ### Next best action
 
 Начать F06.2 — Просмотр корзины. Реализовать `menu:cart`/`cart`: пустая корзина и непустая корзина со списком товаров, количеством, суммой и итогом. Не реализовывать qty/rm/clear/checkout до F06.3/F06.4.
+
+---
+
+## Session Record — 2026-05-09 (F06.2 completed after live-test)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F06.2 — Просмотр корзины
+**Status:** completed inside parent F06
+
+### What was done
+
+- Добавлен `get_user_cart_with_products` в `src/db/crud/cart.py` с eager-load `product` (чтобы избежать `DetachedInstanceError` в async-контексте).
+- Добавлены `CartItemDTO`, `CartViewDTO` и `get_cart_view` в `src/services/cart_service.py`.
+- Создан `src/bot/handlers/cart.py` с `show_cart`.
+- `menu:cart` теперь показывает корзину вместо заглушки.
+- `/cart` тоже показывает корзину.
+- Пустая корзина: текст "🛒 Корзина пуста..." + `empty_cart_keyboard`.
+- Непустая корзина: список товаров, quantity, цена, сумма по позиции и общий итог.
+- Добавлены клавиатуры `empty_cart_keyboard` и `cart_view_keyboard`.
+- Управление количеством, удаление, очистка и checkout не реализовывались — остаются для F06.3/F06.4.
+
+### Evidence
+
+- pytest: 73 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 28 source files ✅
+- Live-test MAX: корзина с товарами отображается корректно, итог 3460 ₽ рассчитан верно, 📚 В каталог работает, 🏠 Главная работает.
+
+### Next best action
+
+Начать F06.3 — Управление корзиной. Реализовать `qty:{product_id}:inc`, `qty:{product_id}:dec`, `rm:{product_id}`, `clear`, `clear:yes`, `clear:no`. Не реализовывать checkout и F07.
 
 ---
 
