@@ -4,11 +4,11 @@
 
 ## Current Verified State
 
-**Статус проекта:** F05 completed → F06 in_progress (F06.1 completed, F06.2 completed)
+**Статус проекта:** F05 completed → F06 in_progress (F06.1 completed, F06.2 completed, F06.3 completed)
 **Текущая фича `in_progress`:** F06 — Корзина
 **Следующая фича по дорожной карте:** F07 — Оформление заказа (FSM)
-**Последний коммит:** `feat(F06): add cart view`
-**Тесты:** 73 passed
+**Последний коммит:** `feat(F06): add cart management controls`
+**Тесты:** 88 passed
 
 ---
 
@@ -100,6 +100,40 @@ F06 декомпозирована на 4 staged-подфичи внутри о�
 ### Next best action
 
 Начать F06.3 — Управление корзиной. Реализовать `qty:{product_id}:inc`, `qty:{product_id}:dec`, `rm:{product_id}`, `clear`, `clear:yes`, `clear:no`. Не реализовывать checkout и F07.
+
+---
+
+## Session Record — 2026-05-09 (F06.3 completed after live-test)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F06.3 — Управление корзиной
+**Status:** completed inside parent F06
+
+### What was done
+
+- Добавлена сервисная логика `change_quantity`, `remove_item`, `clear_cart` в `src/services/cart_service.py` — все возвращают актуальный `CartViewDTO`.
+- Добавлена CRUD-логика `change_quantity` в `src/db/crud/cart.py`: изменение quantity на delta, удаление позиции при quantity <= 0.
+- Экран корзины теперь показывает кнопки ➖, ➕, ❌ для каждой позиции через `cart_view_keyboard(items)`.
+- Добавлена кнопка 🗑 Очистить.
+- Добавлено подтверждение очистки: `clear` → `clear:yes` / `clear:no` через `clear_confirm_keyboard()`.
+- `qty:{product_id}:inc` увеличивает quantity и пересчитывает сумму.
+- `qty:{product_id}:dec` уменьшает quantity и удаляет позицию при нуле.
+- `rm:{product_id}` удаляет позицию из корзины.
+- `clear:yes` очищает корзину и показывает пустой экран.
+- `clear:no` возвращает экран корзины без изменений.
+- Все действия обновляют экран через `edit_message` без каскада новых сообщений.
+- Checkout, FSM, Order и F07 не реализовывались — остаются для F06.4/F07.
+
+### Evidence
+
+- pytest: 88 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 28 source files ✅
+- Live-test MAX: ➕ работает, ➖ работает, удаление до нуля работает, ❌ работает, очистка с подтверждением работает, `clear:yes` работает, `clear:no` работает, 📚 В каталог и 🏠 Главная работают.
+
+### Next best action
+
+Начать F06.4 — Переход к оформлению заказа. Реализовать callback `checkout` только как безопасный переход/заглушку перед F07. Не реализовывать FSM, Order, ФИО, телефон, адрес и полноценное оформление заказа до F07.
 
 ---
 

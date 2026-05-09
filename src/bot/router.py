@@ -104,6 +104,18 @@ class UpdateRouter:
             await self.client.edit_message(chat_id, message_id, stub_text)
             return
 
+        if data == "clear":
+            await cart_handler.confirm_clear_cart(self.client, chat_id, user_id, message_id)
+            return
+
+        if data == "clear:yes":
+            await cart_handler.clear_cart(self.client, chat_id, user_id, message_id)
+            return
+
+        if data == "clear:no":
+            await cart_handler.cancel_clear_cart(self.client, chat_id, user_id, message_id)
+            return
+
         # callback patterns с аргументами
         parts = data.split(":")
         if len(parts) < 2:
@@ -139,4 +151,23 @@ class UpdateRouter:
             except ValueError:
                 return
             await catalog_handler.add_to_cart(self.client, chat_id, user_id, message_id, product_id)
+            return
+
+        if cmd == "qty" and len(parts) == 3:
+            try:
+                product_id = int(parts[1])
+                action = parts[2]
+            except ValueError:
+                return
+            if action in ("inc", "dec"):
+                delta = 1 if action == "inc" else -1
+                await cart_handler.change_quantity(self.client, chat_id, user_id, message_id, product_id, delta)
+            return
+
+        if cmd == "rm" and len(parts) == 2:
+            try:
+                product_id = int(parts[1])
+            except ValueError:
+                return
+            await cart_handler.remove_item(self.client, chat_id, user_id, message_id, product_id)
             return

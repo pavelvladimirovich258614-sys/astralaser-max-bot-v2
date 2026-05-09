@@ -191,6 +191,49 @@ async def test_router_callback_add_id(router):
 
 
 @pytest.mark.asyncio
+async def test_router_callback_qty_inc(router):
+    r, client = router
+    await r.process(_make_callback_payload("qty:1:inc"))
+    assert any(c.get("method") == "edit_message" for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_qty_dec(router):
+    r, client = router
+    await r.process(_make_callback_payload("qty:1:dec"))
+    assert any(c.get("method") == "edit_message" for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_rm(router):
+    r, client = router
+    await r.process(_make_callback_payload("rm:1"))
+    assert any(c.get("method") == "edit_message" for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_clear(router):
+    r, client = router
+    await r.process(_make_callback_payload("clear"))
+    assert any(c.get("method") == "edit_message" for c in client.calls)
+    assert any("Очистить корзину" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_clear_yes(router):
+    r, client = router
+    await r.process(_make_callback_payload("clear:yes"))
+    assert any(c.get("method") == "edit_message" for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_clear_no(router):
+    r, client = router
+    await r.process(_make_callback_payload("clear:no"))
+    assert any(c.get("method") == "edit_message" for c in client.calls)
+
+
+@pytest.mark.asyncio
 async def test_router_message_catalog_command(router):
     r, client = router
     payload = {

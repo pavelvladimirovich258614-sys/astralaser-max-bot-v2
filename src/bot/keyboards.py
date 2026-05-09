@@ -74,9 +74,30 @@ def empty_cart_keyboard() -> list[list[dict[str, Any]]]:
     ]
 
 
-def cart_view_keyboard() -> list[list[dict[str, Any]]]:
-    """Клавиатура для экрана корзины (F06.2: только каталог и главная)."""
+def cart_view_keyboard(items: list[Any]) -> list[list[dict[str, Any]]]:
+    """Клавиатура для экрана корзины с управлением количеством."""
+    buttons: list[list[dict[str, Any]]] = []
+    for item in items:
+        buttons.append(
+            [
+                {"type": "callback", "text": "➖", "payload": f"qty:{item.product_id}:dec"},
+                {"type": "callback", "text": "➕", "payload": f"qty:{item.product_id}:inc"},
+                {"type": "callback", "text": "❌", "payload": f"rm:{item.product_id}"},
+            ]
+        )
+    buttons.append([{"type": "callback", "text": "🗑 Очистить", "payload": "clear"}])
+    buttons.append(
+        [
+            {"type": "callback", "text": "📚 В каталог", "payload": "menu:catalog"},
+            {"type": "callback", "text": "🏠 Главная", "payload": "home"},
+        ]
+    )
+    return buttons
+
+
+def clear_confirm_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура подтверждения очистки корзины."""
     return [
-        [{"type": "callback", "text": "📚 В каталог", "payload": "menu:catalog"}],
-        [{"type": "callback", "text": "🏠 Главная", "payload": "home"}],
+        [{"type": "callback", "text": "✅ Да, очистить", "payload": "clear:yes"}],
+        [{"type": "callback", "text": "↩️ Нет, оставить", "payload": "clear:no"}],
     ]
