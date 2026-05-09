@@ -12,6 +12,36 @@
 
 ---
 
+## Session Record — 2026-05-09 (F06 staged plan approved)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F06 — Корзина (staged implementation plan)
+**Status:** plan approved → awaiting F06.1 implementation
+
+### Plan
+
+F06 декомпозирована на 4 staged-подфичи внутри одной родительской фичи F06:
+
+- **F06.1** — Добавление товара в корзину из карточки товара. Только callback `add:{product_id}`, добавление или увеличение quantity, подтверждение «✅ Товар добавлен в корзину», кнопки перехода. Без просмотра корзины, без qty, без clear, без checkout.
+- **F06.2** — Просмотр корзины. Callback `menu:cart` или `cart`, пустая и непустая корзина, список позиций и итог. Без управления количеством и без оформления.
+- **F06.3** — Управление корзиной. Callback patterns: `qty:{product_id}:inc`, `qty:{product_id}:dec`, `rm:{product_id}`, `clear`, `clear:yes`, `clear:no`.
+- **F06.4** — Переход к оформлению. Callback `checkout`, только безопасная заглушка или подготовка перехода к F07. Полную FSM-анкету и создание Order оставить на F07.
+
+### Next best action
+
+Начать F06.1 с минимального шага — проверить текущие `add_to_cart`, `added_to_cart_keyboard`, router `add:{product_id}`; затем сделать только подтверждение добавления с реальными кнопками возврата.
+
+### Guardrails for F06.1
+
+- Не создавать `src/bot/handlers/cart.py`.
+- Не реализовывать экран корзины (это F06.2).
+- Не добавлять callback patterns `qty:*`, `rm:*`, `clear`, `checkout`.
+- Не трогать F07 (оформление заказа, FSM, Order).
+- Не менять `feature_list.json`, `seed_db.py`, БД, миграции, `.env`.
+- Не делать git commit без прохождения тестов.
+
+---
+
 ## Session Record — 2026-05-09 (F05 completed after live-test)
 
 **Agent:** Kimi K2.6 (OpenCode)
