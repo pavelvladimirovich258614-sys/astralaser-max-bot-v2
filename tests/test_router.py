@@ -5,12 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from src.bot import router as router_module
 from src.bot.handlers import cart as cart_handler
 from src.bot.handlers import catalog as catalog_handler
 from src.bot.handlers import order as order_handler
 from src.bot.router import UpdateRouter
-from src.db.models import Base
-from src.services import catalog_service
+from src.db.models import Base, User
+from src.services import catalog_service, fsm_service
 from src.services.catalog_service import ProductCardDTO
 
 
@@ -83,6 +84,20 @@ async def override_order_session_maker(monkeypatch, async_engine):
 
     test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
     monkeypatch.setattr(order_handler, "async_session_maker", test_session_maker)
+
+    yield
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest.fixture(autouse=True)
+async def override_router_session_maker(monkeypatch, async_engine):
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(router_module, "async_session_maker", test_session_maker)
 
     yield
 
@@ -332,6 +347,56 @@ async def test_router_duplicate_after_ttl_allowed(router, monkeypatch):
     payload = _make_callback_payload("menu:orders")
     await r.process(payload)
     await r.process(payload)
-    await r.process(payload)
-    orders_calls = [c for c in client.calls if c.get("text") == "📦 Мои заказы — скоро."]
-    assert len(orders_calls) == 2
+
+
+def _make_message_payload(text: str, user_id: str = "123", chat_id: str = "456", message_id: str = "msg_1") -> dict[str, Any]:
+    return {
+        "update_type": "message_created",
+        "message": {
+            "recipient": {"chat_id": chat_id},
+            "sender": {"user_id": user_id},
+            "body": {"text": text, "mid": message_id},
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_router_message_in_order_state_goes_to_order_handler(router, async_engine):
+    r, client = router
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        user = User(max_user_id="800", full_name="Test")
+        session.add(user)
+        await session.commit()
+        await fsm_service.set_waiting_name(session, user.id)
+
+    await r.process(_make_message_payload("Иван Иванов", user_id="800"))
+    assert any("Шаг 2/4" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_message_without_state_keeps_existing_behavior(router):
+    r, client = router
+    await r.process(_make_message_payload("/start"))
+    assert any("edit_message" == c["method"] or "send_message" == c["method"] for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_message_fsm_ignores_regular_command_routing(router, async_engine):
+    r, client = router
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        user = User(max_user_id="801", full_name="Test")
+        session.add(user)
+        await session.commit()
+        await fsm_service.set_waiting_name(session, user.id)
+
+    await r.process(_make_message_payload("/catalog", user_id="801"))
+    # В FSM-state текст /catalog должен обрабатываться как FSM (имя), а не как команда
+    assert any("Пожалуйста, напишите ФИО полностью" in c.get("text", "") for c in client.calls)

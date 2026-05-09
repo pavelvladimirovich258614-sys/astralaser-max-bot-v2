@@ -54,14 +54,19 @@ async def override_order_session_maker(monkeypatch, async_engine):
 
 
 class RecordingClient:
-    def __init__(self):
+    def __init__(self, delete_returns=True):
         self.calls = []
+        self.delete_returns = delete_returns
 
     async def edit_message(self, chat_id, message_id, text, reply_markup=None, photo_url=None, photo=None):
         self.calls.append({"method": "edit_message", "chat_id": chat_id, "text": text, "reply_markup": reply_markup})
 
     async def send_message(self, chat_id, text, reply_markup=None, photo_url=None, photo=None):
         self.calls.append({"method": "send_message", "chat_id": chat_id, "text": text, "reply_markup": reply_markup})
+
+    async def delete_message(self, chat_id, message_id):
+        self.calls.append({"method": "delete_message", "chat_id": chat_id, "message_id": message_id})
+        return self.delete_returns
 
 
 @pytest.mark.asyncio
@@ -182,3 +187,184 @@ async def test_cancel_checkout_clears_state_and_returns_cart(db_session):
     call = client.calls[0]
     assert call["method"] == "edit_message"
     assert "Ваша корзина" in call["text"]
+
+
+# ---------------------------------------------------------------------------
+# F07.2 — FSM data collection
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_handle_name_valid_moves_to_phone(db_session):
+    """Валидное ФИО сохраняется, state переходит на order:waiting_phone."""
+    user = User(max_user_id="700", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_waiting_name(db_session, user.id)
+
+    client = RecordingClient()
+    handled = await order_handler.handle_fsm_message(client, chat_id=1, user_id="700", message_id="m1", text="Иван Иванов")
+    assert handled is True
+
+    async with order_handler.async_session_maker() as fresh:
+        state, data = await fsm_service.get_state(fresh, user.id)
+    assert state == "order:waiting_phone"
+    assert data["customer_name"] == "Иван Иванов"
+    assert any("Шаг 2/4" in c["text"] for c in client.calls if c["method"] == "send_message")
+
+
+@pytest.mark.asyncio
+async def test_handle_name_invalid_stays_waiting_name(db_session):
+    """Невалидное имя не меняет state."""
+    user = User(max_user_id="701", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_waiting_name(db_session, user.id)
+
+    client = RecordingClient()
+    handled = await order_handler.handle_fsm_message(client, chat_id=1, user_id="701", message_id="m1", text="И")
+    assert handled is True
+
+    state, _ = await fsm_service.get_state(db_session, user.id)
+    assert state == "order:waiting_name"
+    assert any("Пожалуйста, напишите ФИО полностью" in c["text"] for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_handle_phone_valid_moves_to_address(db_session):
+    """Валидный телефон сохраняется, state переходит на order:waiting_address."""
+    user = User(max_user_id="702", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, "order:waiting_phone", {"customer_name": "Иван"})
+
+    client = RecordingClient()
+    handled = await order_handler.handle_fsm_message(client, chat_id=1, user_id="702", message_id="m1", text="+7 903 348 92 05")
+    assert handled is True
+
+    async with order_handler.async_session_maker() as fresh:
+        state, data = await fsm_service.get_state(fresh, user.id)
+    assert state == "order:waiting_address"
+    assert data["phone"] == "+7 903 348 92 05"
+    assert any("Шаг 3/4" in c["text"] for c in client.calls if c["method"] == "send_message")
+
+
+@pytest.mark.asyncio
+async def test_handle_phone_invalid_stays_waiting_phone(db_session):
+    """Невалидный телефон не меняет state."""
+    user = User(max_user_id="703", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, "order:waiting_phone", {})
+
+    client = RecordingClient()
+    handled = await order_handler.handle_fsm_message(client, chat_id=1, user_id="703", message_id="m1", text="abc")
+    assert handled is True
+
+    state, _ = await fsm_service.get_state(db_session, user.id)
+    assert state == "order:waiting_phone"
+    assert any("Не похоже на телефон" in c["text"] for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_handle_address_valid_moves_to_notes(db_session):
+    """Валидный адрес сохраняется, state переходит на order:waiting_notes."""
+    user = User(max_user_id="704", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, "order:waiting_address", {})
+
+    client = RecordingClient()
+    handled = await order_handler.handle_fsm_message(client, chat_id=1, user_id="704", message_id="m1", text="Москва, ул. Ленина 1")
+    assert handled is True
+
+    async with order_handler.async_session_maker() as fresh:
+        state, data = await fsm_service.get_state(fresh, user.id)
+    assert state == "order:waiting_notes"
+    assert data["address"] == "Москва, ул. Ленина 1"
+    assert any("Шаг 4/4" in c["text"] for c in client.calls if c["method"] == "send_message")
+
+
+@pytest.mark.asyncio
+async def test_handle_notes_valid_moves_to_ready_confirm(db_session):
+    """Валидные notes сохраняются, state переходит на order:ready_confirm."""
+    user = User(max_user_id="705", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, "order:waiting_notes", {})
+
+    client = RecordingClient()
+    handled = await order_handler.handle_fsm_message(client, chat_id=1, user_id="705", message_id="m1", text="Гравировка: Love")
+    assert handled is True
+
+    async with order_handler.async_session_maker() as fresh:
+        state, data = await fsm_service.get_state(fresh, user.id)
+    assert state == "order:ready_confirm"
+    assert data["notes"] == "Гравировка: Love"
+    assert any("Данные для заказа собраны" in c["text"] for c in client.calls if c["method"] == "send_message")
+
+
+@pytest.mark.asyncio
+async def test_handle_notes_empty_uses_default(db_session):
+    """Пустой комментарий заменяется на дефолтный текст."""
+    user = User(max_user_id="706", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, "order:waiting_notes", {})
+
+    client = RecordingClient()
+    handled = await order_handler.handle_fsm_message(client, chat_id=1, user_id="706", message_id="m1", text="   ")
+    assert handled is True
+
+    async with order_handler.async_session_maker() as fresh:
+        _, data = await fsm_service.get_state(fresh, user.id)
+    assert data["notes"] == "Обсудим с менеджером"
+
+
+@pytest.mark.asyncio
+async def test_handle_notes_too_long_stays_waiting_notes(db_session):
+    """Слишком длинный комментарий не меняет state."""
+    user = User(max_user_id="707", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, "order:waiting_notes", {})
+
+    client = RecordingClient()
+    long_text = "x" * 501
+    handled = await order_handler.handle_fsm_message(client, chat_id=1, user_id="707", message_id="m1", text=long_text)
+    assert handled is True
+
+    state, _ = await fsm_service.get_state(db_session, user.id)
+    assert state == "order:waiting_notes"
+    assert any("Слишком длинный комментарий" in c["text"] for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_valid_fsm_message_best_effort_deletes_user_message(db_session):
+    """После валидного сообщения вызывается delete_message с message_id пользователя."""
+    user = User(max_user_id="708", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_waiting_name(db_session, user.id)
+
+    client = RecordingClient()
+    await order_handler.handle_fsm_message(client, chat_id=1, user_id="708", message_id="user_msg_42", text="Иван Иванов")
+
+    delete_calls = [c for c in client.calls if c["method"] == "delete_message"]
+    assert len(delete_calls) == 1
+    assert delete_calls[0]["message_id"] == "user_msg_42"
+
+
+@pytest.mark.asyncio
+async def test_delete_message_failure_does_not_break_fsm(db_session):
+    """Если delete_message возвращает False, state всё равно переходит дальше."""
+    user = User(max_user_id="709", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_waiting_name(db_session, user.id)
+
+    client = RecordingClient(delete_returns=False)
+    await order_handler.handle_fsm_message(client, chat_id=1, user_id="709", message_id="m1", text="Иван Иванов")
+
+    async with order_handler.async_session_maker() as fresh:
+        state, _ = await fsm_service.get_state(fresh, user.id)
+    assert state == "order:waiting_phone"

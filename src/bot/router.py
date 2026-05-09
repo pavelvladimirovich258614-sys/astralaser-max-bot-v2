@@ -10,6 +10,8 @@ from src.bot.handlers import catalog as catalog_handler
 from src.bot.handlers import order as order_handler
 from src.bot.handlers import start as start_handler
 from src.bot.max_client import MAXClient
+from src.db.engine import async_session_maker
+from src.services import fsm_service, user_service
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +42,23 @@ class UpdateRouter:
         user = msg.get("sender", {})
         user_id = user.get("user_id") or user.get("id")
         text = msg.get("body", {}).get("text", "")
+        message_id = msg.get("body", {}).get("mid")
 
         if not chat_id or not user_id:
             return
+
+        # Проверить FSM-состояние перед обычными командами
+        async with async_session_maker() as session:
+            user_obj = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+            await session.commit()
+            state, _ = await fsm_service.get_state(session, user_obj.id)
+
+        if fsm_service.is_order_state(state):
+            handled = await order_handler.handle_fsm_message(
+                self.client, chat_id, user_id, message_id, text
+            )
+            if handled:
+                return
 
         if text.startswith("/start"):
             await start_handler.handle_start(self.client, chat_id, user_id, user)

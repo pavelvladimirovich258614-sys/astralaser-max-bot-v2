@@ -117,3 +117,11 @@ def order_cancel_keyboard() -> list[list[dict[str, Any]]]:
     return [
         [{"type": "callback", "text": "❌ Отменить оформление", "payload": "order:cancel"}],
     ]
+
+
+def order_ready_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура для экрана готовности заказа (до F07.3 — только отмена)."""
+    return [
+        [{"type": "callback", "text": "📋 Перейти к подтверждению", "payload": "order:summary"}],
+        [{"type": "callback", "text": "❌ Отменить оформление", "payload": "order:cancel"}],
+    ]

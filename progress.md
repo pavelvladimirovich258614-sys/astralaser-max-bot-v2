@@ -166,6 +166,61 @@ F06 декомпозирована на 4 staged-подфичи внутри о�
 
 ---
 
+## Session Record — 2026-05-09 (F07.2 completed after live-test)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F07.2 — FSM-сбор данных клиента
+**Status:** completed inside parent F07
+
+### What was done
+
+- Добавлены FSM state constants: `order:waiting_name`, `order:waiting_phone`, `order:waiting_address`, `order:waiting_notes`, `order:ready_confirm`.
+- Добавлен `fsm_service.is_order_state`.
+- Добавлен `fsm_service.update_data` для накопления данных в `UserState.data`.
+- Router теперь проверяет active order-state перед обычной обработкой текстовых команд.
+- Текстовые сообщения пользователя в active order-state направляются в `order_handler.handle_fsm_message`.
+- Реализован сбор ФИО с базовой валидацией (отклонение `/` и слишком коротких строк).
+- Реализован сбор телефона с regex `^\+?\d[\d\s\-\(\)]{9,17}$`.
+- Реализован сбор адреса доставки или пункта СДЭК (5–300 символов).
+- Реализован сбор текста гравировки или комментария (0–500 символов).
+- Пустой комментарий сохраняется как "Обсудим с менеджером".
+- После сбора всех данных state переводится в `order:ready_confirm`.
+- После успешной обработки валидного пользовательского сообщения выполняется best-effort `delete_message` для user message.
+- Если удаление user message не сработало или MAX не разрешил удаление, FSM не падает — логируется и продолжается.
+- Добавлена `order_ready_keyboard` в `src/bot/keyboards.py` (payload `order:summary` для F07.3 — пока не подключена в router).
+- Добавлены тесты FSM data collection (10 тестов):
+  - Валидация ФИО, телефона, адреса, комментария.
+  - Пустой комментарий → дефолт.
+  - Слишком длинный комментарий → state не меняется.
+  - Best-effort delete_message вызывается после валидного ввода.
+  - Удаление не ломает FSM при возврате False.
+- Обновлены `tests/test_router.py`:
+  - fixture `override_router_session_maker` для мока `async_session_maker` в router.
+  - `test_router_message_in_order_state_goes_to_order_handler`.
+  - `test_router_message_without_state_keeps_existing_behavior`.
+  - `test_router_message_fsm_ignores_regular_command_routing`.
+- Создание Order, OrderItem, summary заказа и уведомления менеджерам не реализовывались.
+
+### Evidence
+
+- pytest: 115 passed, 2 warnings
+- ruff: exit 0
+- mypy: `Success: no issues found in 30 source files`
+- live-test MAX:
+  - ФИО → телефон → адрес → гравировка прошли последовательно.
+  - После последнего шага показан экран "✅ Данные для заказа собраны. Следующий шаг — проверить заказ и подтвердить оформление."
+  - `order:cancel` вернул пользователя в корзину.
+
+### UX note
+
+- Пользовательские сообщения визуально остались в чате; best-effort deletion не блокирует сценарий и переносится как known limitation MAX/client behavior.
+
+### Next best action
+
+Начать F07.3 — Экран подтверждения заказа. Реализовать callback `order:summary`, который показывает summary перед созданием заказа: товары, итог, ФИО, телефон, адрес, текст гравировки/комментарий. Добавить кнопки ✅ Подтвердить заказ и ❌ Отмена. Не создавать Order и не отправлять менеджерам уведомления до F07.4/F07.5.
+
+---
+
 ## Session Record — 2026-05-09 (F07.1 completed after live-test)
 
 **Agent:** Kimi K2.6 (OpenCode)

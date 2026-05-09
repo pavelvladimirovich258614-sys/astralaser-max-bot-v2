@@ -7,6 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.crud import user_state as user_state_crud
 
+ORDER_WAITING_NAME = "order:waiting_name"
+ORDER_WAITING_PHONE = "order:waiting_phone"
+ORDER_WAITING_ADDRESS = "order:waiting_address"
+ORDER_WAITING_NOTES = "order:waiting_notes"
+ORDER_READY_CONFIRM = "order:ready_confirm"
+
 
 async def get_state(session: AsyncSession, user_id: int) -> tuple[str | None, dict[str, Any]]:
     """Получить текущий FSM-state и данные пользователя."""
@@ -33,4 +39,16 @@ async def clear_state(session: AsyncSession, user_id: int) -> None:
 
 async def set_waiting_name(session: AsyncSession, user_id: int) -> None:
     """Перевести пользователя в состояние ожидания ФИО."""
-    await set_state(session, user_id, "order:waiting_name", {})
+    await set_state(session, user_id, ORDER_WAITING_NAME, {})
+
+
+def is_order_state(state: str | None) -> bool:
+    """Проверить, что state относится к оформлению заказа."""
+    return bool(state and state.startswith("order:"))
+
+
+async def update_data(session: AsyncSession, user_id: int, updates: dict[str, Any], next_state: str) -> None:
+    """Обновить data пользователя и перейти на следующий FSM-state."""
+    _, current_data = await get_state(session, user_id)
+    merged = {**current_data, **updates}
+    await set_state(session, user_id, next_state, merged)
