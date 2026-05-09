@@ -102,7 +102,9 @@
     {
       "id": "F06",
       "name": "Корзина",
-      "status": "in_progress",
+      "status": "completed",
+      "completed_at": "2026-05-09",
+      "evidence": "pytest: 95 passed, ruff: exit 0, mypy: clean, init.ps1: READY, live-test: qty+/-/rm/clear/checkout ok",
       "depends_on": ["F05"],
       "acceptance_criteria": [
         "[🛒 Корзина] показывает товары через edit_message",
@@ -116,7 +118,7 @@
     {
       "id": "F07",
       "name": "Оформление заказа (FSM)",
-      "status": "todo",
+      "status": "in_progress",
       "depends_on": ["F06"],
       "acceptance_criteria": [
         "FSM реализован через UserState (persistent в БД)",

@@ -265,6 +265,14 @@ async def test_router_message_cart_command(router):
 
 
 @pytest.mark.asyncio
+async def test_router_callback_checkout(router):
+    r, client = router
+    await r.process(_make_callback_payload("checkout"))
+    assert any(c.get("method") == "edit_message" for c in client.calls)
+    assert any("Корзина пуста" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
 async def test_router_duplicate_callback_ignored(router):
     r, client = router
     payload = _make_callback_payload("menu:orders")

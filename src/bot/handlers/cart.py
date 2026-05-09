@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from src.bot.keyboards import cart_view_keyboard, clear_confirm_keyboard, empty_cart_keyboard
+from src.bot.keyboards import (
+    cart_view_keyboard,
+    checkout_stub_keyboard,
+    clear_confirm_keyboard,
+    empty_cart_keyboard,
+)
 from src.bot.max_client import MAXClient
 from src.db.engine import async_session_maker
 from src.services import cart_service, user_service
@@ -112,3 +117,33 @@ async def cancel_clear_cart(
 ) -> None:
     """Отменить очистку и вернуть экран корзины."""
     await _render_cart(client, chat_id, user_id, message_id)
+
+
+async def checkout(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None = None,
+) -> None:
+    """Переход к оформлению заказа. Если корзина пустая — показать пустую корзину."""
+    async with async_session_maker() as session:
+        user = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        cart_view = await cart_service.get_cart_view(session, user.id)
+
+    if not cart_view.items:
+        text = "🛒 Корзина пуста.\n\nВы можете перейти в каталог и выбрать изделие с гравировкой."
+        keyboard = empty_cart_keyboard()
+    else:
+        text = (
+            "✅ Корзина готова к оформлению.\n\n"
+            "На следующем шаге мы соберём данные для заказа:\n"
+            "ФИО, телефон, адрес доставки и текст гравировки.\n\n"
+            "Пока оформление заказа вынесено в следующий этап."
+        )
+        keyboard = checkout_stub_keyboard()
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)

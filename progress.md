@@ -4,11 +4,11 @@
 
 ## Current Verified State
 
-**Статус проекта:** F05 completed → F06 in_progress (F06.1 completed, F06.2 completed, F06.3 completed)
-**Текущая фича `in_progress`:** F06 — Корзина
-**Следующая фича по дорожной карте:** F07 — Оформление заказа (FSM)
-**Последний коммит:** `feat(F06): add cart management controls`
-**Тесты:** 88 passed
+**Статус проекта:** F06 completed → F07 in_progress
+**Текущая фича `in_progress`:** F07 — Оформление заказа (FSM)
+**Следующая фича по дорожной карте:** F08 — Менеджер и помощь
+**Последний коммит:** `feat(F06): add checkout transition and complete cart`
+**Тесты:** 95 passed
 
 ---
 
@@ -134,6 +134,35 @@ F06 декомпозирована на 4 staged-подфичи внутри о�
 ### Next best action
 
 Начать F06.4 — Переход к оформлению заказа. Реализовать callback `checkout` только как безопасный переход/заглушку перед F07. Не реализовывать FSM, Order, ФИО, телефон, адрес и полноценное оформление заказа до F07.
+
+---
+
+## Session Record — 2026-05-09 (F06.4 completed after live-test)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F06.4 — Переход к оформлению заказа
+**Status:** completed; parent F06 completed; F07 opened
+
+### What was done
+
+- В `cart_view_keyboard` для непустой корзины добавлена кнопка ✅ Оформить заказ с payload `checkout`.
+- Добавлена `checkout_stub_keyboard` с кнопками 🛒 Вернуться в корзину (`menu:cart`) и 🏠 Главная (`home`).
+- Добавлен `cart_handler.checkout`:
+  - Пустая корзина → обычный экран пустой корзины.
+  - Непустая корзина → placeholder-экран "✅ Корзина готова к оформлению..."
+- Router подключает callback `checkout` → `cart_handler.checkout`.
+- Полная FSM-анкета, создание Order, сбор ФИО, телефона, адреса и текста гравировки не реализовывались — остаются для F07.
+
+### Evidence
+
+- pytest: 95 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 28 source files ✅
+- Live-test MAX: кнопка ✅ Оформить заказ появилась в корзине; placeholder отображается корректно; 🛒 Вернуться в корзину работает; 🏠 Главная работает.
+
+### Next best action
+
+Начать F07 — Оформление заказа. Реализовать FSM-анкету: ФИО, телефон, адрес доставки, текст гравировки/комментарий, подтверждение заказа, создание Order и OrderItem из корзины. Не трогать админку, подписку и F08+.
 
 ---
 

@@ -104,6 +104,10 @@ class UpdateRouter:
             await self.client.edit_message(chat_id, message_id, stub_text)
             return
 
+        if data == "checkout":
+            await cart_handler.checkout(self.client, chat_id, user_id, message_id)
+            return
+
         if data == "clear":
             await cart_handler.confirm_clear_cart(self.client, chat_id, user_id, message_id)
             return

@@ -85,6 +85,7 @@ def cart_view_keyboard(items: list[Any]) -> list[list[dict[str, Any]]]:
                 {"type": "callback", "text": "❌", "payload": f"rm:{item.product_id}"},
             ]
         )
+    buttons.append([{"type": "callback", "text": "✅ Оформить заказ", "payload": "checkout"}])
     buttons.append([{"type": "callback", "text": "🗑 Очистить", "payload": "clear"}])
     buttons.append(
         [
@@ -100,4 +101,12 @@ def clear_confirm_keyboard() -> list[list[dict[str, Any]]]:
     return [
         [{"type": "callback", "text": "✅ Да, очистить", "payload": "clear:yes"}],
         [{"type": "callback", "text": "↩️ Нет, оставить", "payload": "clear:no"}],
+    ]
+
+
+def checkout_stub_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура placeholder-экрана оформления заказа."""
+    return [
+        [{"type": "callback", "text": "🛒 Вернуться в корзину", "payload": "menu:cart"}],
+        [{"type": "callback", "text": "🏠 Главная", "payload": "home"}],
     ]

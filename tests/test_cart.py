@@ -331,3 +331,94 @@ async def test_cancel_clear_cart_returns_to_cart(db_session):
     call = client.calls[0]
     assert call["method"] == "edit_message"
     assert "Ваша корзина" in call["text"]
+
+
+@pytest.mark.asyncio
+async def test_cart_view_keyboard_has_checkout():
+    """cart_view_keyboard для непустой корзины содержит payload checkout."""
+    from src.bot.keyboards import cart_view_keyboard
+    from src.services.cart_service import CartItemDTO
+
+    items = [CartItemDTO(product_id=1, title="A", price=100, quantity=1, line_total=100)]
+    keyboard = cart_view_keyboard(items)
+    assert any(b["payload"] == "checkout" for row in keyboard for b in row)
+
+
+@pytest.mark.asyncio
+async def test_empty_cart_keyboard_no_checkout():
+    """empty_cart_keyboard не содержит payload checkout."""
+    from src.bot.keyboards import empty_cart_keyboard
+
+    keyboard = empty_cart_keyboard()
+    assert not any(b["payload"] == "checkout" for row in keyboard for b in row)
+
+
+@pytest.mark.asyncio
+async def test_checkout_stub_keyboard_has_menu_cart_and_home():
+    """checkout_stub_keyboard содержит menu:cart и home."""
+    from src.bot.keyboards import checkout_stub_keyboard
+
+    keyboard = checkout_stub_keyboard()
+    assert any(b["payload"] == "menu:cart" for row in keyboard for b in row)
+    assert any(b["payload"] == "home" for row in keyboard for b in row)
+
+
+@pytest.mark.asyncio
+async def test_checkout_empty_cart_shows_empty(db_session):
+    """checkout при пустой корзине показывает экран пустой корзины."""
+    user = User(max_user_id="999", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await cart_handler.checkout(client, chat_id=1, user_id="999", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert call["method"] == "edit_message"
+    assert "Корзина пуста" in call["text"]
+
+
+@pytest.mark.asyncio
+async def test_checkout_non_empty_cart_shows_placeholder(db_session):
+    """checkout при непустой корзине показывает placeholder."""
+    user = User(max_user_id="1000", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+    product = Product(category_id=1, title="P", description="D", price=100, cover_url="url")
+    db_session.add(product)
+    await db_session.flush()
+    cart = CartItem(user_id=user.id, product_id=product.id, quantity=1)
+    db_session.add(cart)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await cart_handler.checkout(client, chat_id=1, user_id="1000", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert call["method"] == "edit_message"
+    assert "Корзина готова к оформлению" in call["text"]
+    assert any(b["payload"] == "menu:cart" for row in call["reply_markup"] for b in row)
+    assert any(b["payload"] == "home" for row in call["reply_markup"] for b in row)
+
+
+@pytest.mark.asyncio
+async def test_checkout_non_empty_cart_uses_send_message_without_message_id(db_session):
+    """checkout без message_id использует send_message."""
+    user = User(max_user_id="1001", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+    product = Product(category_id=1, title="P", description="D", price=100, cover_url="url")
+    db_session.add(product)
+    await db_session.flush()
+    cart = CartItem(user_id=user.id, product_id=product.id, quantity=1)
+    db_session.add(cart)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await cart_handler.checkout(client, chat_id=1, user_id="1001")
+
+    assert len(client.calls) == 1
+    assert client.calls[0]["method"] == "send_message"
+    assert "Корзина готова к оформлению" in client.calls[0]["text"]
