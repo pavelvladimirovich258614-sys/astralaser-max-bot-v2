@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 from src.bot.handlers import cart as cart_handler
 from src.bot.handlers import catalog as catalog_handler
+from src.bot.handlers import order as order_handler
 from src.bot.router import UpdateRouter
 from src.db.models import Base
 from src.services import catalog_service
@@ -68,6 +69,20 @@ async def override_cart_session_maker(monkeypatch, async_engine):
 
     test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
     monkeypatch.setattr(cart_handler, "async_session_maker", test_session_maker)
+
+    yield
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest.fixture(autouse=True)
+async def override_order_session_maker(monkeypatch, async_engine):
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(order_handler, "async_session_maker", test_session_maker)
 
     yield
 
@@ -268,6 +283,14 @@ async def test_router_message_cart_command(router):
 async def test_router_callback_checkout(router):
     r, client = router
     await r.process(_make_callback_payload("checkout"))
+    assert any(c.get("method") == "edit_message" for c in client.calls)
+    assert any("Корзина пуста" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_order_cancel(router):
+    r, client = router
+    await r.process(_make_callback_payload("order:cancel"))
     assert any(c.get("method") == "edit_message" for c in client.calls)
     assert any("Корзина пуста" in c.get("text", "") for c in client.calls)
 

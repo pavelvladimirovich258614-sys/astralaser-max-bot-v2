@@ -110,3 +110,10 @@ def checkout_stub_keyboard() -> list[list[dict[str, Any]]]:
         [{"type": "callback", "text": "🛒 Вернуться в корзину", "payload": "menu:cart"}],
         [{"type": "callback", "text": "🏠 Главная", "payload": "home"}],
     ]
+
+
+def order_cancel_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура для экранов оформления заказа с кнопкой отмены."""
+    return [
+        [{"type": "callback", "text": "❌ Отменить оформление", "payload": "order:cancel"}],
+    ]

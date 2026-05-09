@@ -7,6 +7,7 @@ from typing import Any
 
 from src.bot.handlers import cart as cart_handler
 from src.bot.handlers import catalog as catalog_handler
+from src.bot.handlers import order as order_handler
 from src.bot.handlers import start as start_handler
 from src.bot.max_client import MAXClient
 
@@ -105,7 +106,11 @@ class UpdateRouter:
             return
 
         if data == "checkout":
-            await cart_handler.checkout(self.client, chat_id, user_id, message_id)
+            await order_handler.start_checkout(self.client, chat_id, user_id, message_id)
+            return
+
+        if data == "order:cancel":
+            await order_handler.cancel_checkout(self.client, chat_id, user_id, message_id)
             return
 
         if data == "clear":

@@ -166,6 +166,51 @@ F06 декомпозирована на 4 staged-подфичи внутри о�
 
 ---
 
+## Session Record — 2026-05-09 (F07.1 completed after live-test)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F07.1 — Старт оформления заказа из корзины
+**Status:** completed inside parent F07
+
+### What was done
+
+- Создан `src/services/fsm_service.py` с функциями `get_state`, `set_state`, `clear_state`, `set_waiting_name`.
+- Создан `src/bot/handlers/order.py`:
+  - `start_checkout` — при пустой корзине показывает пустую корзину, при непустой ставит state `order:waiting_name` и показывает экран "Шаг 1/4. Как вас зовут?".
+  - `cancel_checkout` — callback `order:cancel` очищает `UserState` и возвращает пользователя в корзину через `cart_handler.show_cart`.
+- Добавлена `order_cancel_keyboard` в `src/bot/keyboards.py` (❌ Отменить оформление → `order:cancel`).
+- `src/bot/router.py`: `checkout` теперь роутится в `order_handler.start_checkout`; добавлен `order:cancel` → `order_handler.cancel_checkout`.
+- Добавлены явные `await session.commit()` после `set_waiting_name` и `clear_state` для гарантии сохранения state в реальной БД.
+- Добавлены тесты в `tests/test_order.py` (6 тестов):
+  - FSM set/clear state через `user_state_crud`.
+  - Пустая корзина → пустая корзина, state не ставится.
+  - Непустая корзина → state `order:waiting_name` сохраняется через fresh session.
+  - Экран содержит "Шаг 1/4" и клавиатуру отмены.
+  - Отмена очищает state через fresh session и возвращает корзину.
+- Обновлены `tests/test_router.py`:
+  - fixture `override_order_session_maker` для мока `async_session_maker` в `order_handler`.
+  - `test_router_callback_order_cancel` — проверяет маршрутизацию `order:cancel`.
+
+### Evidence
+
+- pytest: 102 passed, 2 warnings
+- ruff: exit 0
+- mypy: `Success: no issues found in 30 source files`
+- live-test MAX:
+  - checkout в непустой корзине → экран "Шаг 1/4. Как вас зовут?" с кнопкой ❌ Отменить оформление.
+  - `order:cancel` → корзина очищается и возвращает пользователя.
+
+### UX note for F07.2
+
+- Пользователь ввёл ФИО после шага 1/4 — сообщение осталось в чате (ожидаемо, F07.2 ещё не реализована).
+- В F07.2 нужно добавить обработку текстовых FSM-сообщений и рассмотреть best-effort удаление пользовательских сообщений после успешной обработки, если MAX API позволяет удалять user messages; если удаление запрещено — логировать и продолжать без падения.
+
+### Next best action
+
+Начать F07.2 — FSM-сбор данных клиента. Реализовать обработку текстовых сообщений в состояниях `order:waiting_name`, `order:waiting_phone`, `order:waiting_address`, `order:waiting_notes`. После успешной обработки текста попытаться best-effort удалить пользовательское сообщение, если `delete_message` работает для user messages; если MAX запрещает удаление — логировать и продолжать без падения. Не создавать Order и не отправлять менеджерам уведомление до F07.4/F07.5.
+
+---
+
 ## Session Record — 2026-05-09 (F07 staged plan approved)
 
 **Agent:** Kimi K2.6 (OpenCode)
