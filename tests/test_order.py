@@ -71,7 +71,7 @@ class RecordingClient:
         return self.delete_returns
 
     async def get_chat_member(self, chat_id, user_id):
-        return {"status": "member"}
+        return {"members": [{"user_id": int(user_id)}]}
 
 
 @pytest.mark.asyncio

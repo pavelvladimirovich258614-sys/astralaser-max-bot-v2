@@ -10,11 +10,7 @@ from src.services import subscription_service
 
 logger = logging.getLogger(__name__)
 
-GATE_TEXT = (
-    "📢 Чтобы оформить заказ, подпишитесь на наш канал в MAX\n\n"
-    "Там скидки, новинки и идеи гравировок.\n\n"
-    "После подписки нажмите «✅ Я подписался»."
-)
+GATE_TEXT = "📢 Чтобы оформить заказ, подпишитесь на наш канал в MAX"
 
 RETRY_TEXT = (
     "Мы пока не видим подписку. Попробуйте через минуту.\n\n"
@@ -23,9 +19,15 @@ RETRY_TEXT = (
 
 
 def _build_gate_text(channel_url: str) -> str:
+    parts = [GATE_TEXT]
     if channel_url:
-        return GATE_TEXT + f"\n\n🌐 Канал: {channel_url}"
-    return GATE_TEXT
+        parts.append(f"\n\n🌐 Канал: {channel_url}")
+    parts.append(
+        "\n\n🎁 Подписчикам канала даём скидку 10%."
+        "\nПосле подписки скажите менеджеру, что вы подписаны на канал, чтобы скидку учли."
+        "\n\nПосле подписки нажмите «✅ Я подписался»."
+    )
+    return "".join(parts)
 
 
 async def check_subscription(
@@ -46,7 +48,7 @@ async def check_subscription(
         logger.warning("get_chat_member failed in sub:check for user=%s", user_id, exc_info=True)
         member = None
 
-    if subscription_service.is_member_status(member):
+    if subscription_service.is_subscribed(member):
         await order_handler.start_checkout(client, chat_id, user_id, message_id)
     else:
         text = RETRY_TEXT

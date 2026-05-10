@@ -79,7 +79,42 @@ def _make_user_with_cart(async_engine, max_user_id="900"):
 
 
 # ---------------------------------------------------------------------------
-# Service tests
+# Service tests: is_subscribed (new MAX API format)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_is_subscribed_with_members():
+    assert subscription_service.is_subscribed({"members": [{"user_id": 123}]}) is True
+
+
+@pytest.mark.asyncio
+async def test_is_subscribed_with_multiple_members():
+    assert subscription_service.is_subscribed({"members": [{"user_id": 123}, {"user_id": 456}]}) is True
+
+
+@pytest.mark.asyncio
+async def test_is_subscribed_empty_members():
+    assert subscription_service.is_subscribed({"members": []}) is False
+
+
+@pytest.mark.asyncio
+async def test_is_subscribed_none_response():
+    assert subscription_service.is_subscribed(None) is False
+
+
+@pytest.mark.asyncio
+async def test_is_subscribed_empty_dict():
+    assert subscription_service.is_subscribed({}) is False
+
+
+@pytest.mark.asyncio
+async def test_is_subscribed_marker_only():
+    assert subscription_service.is_subscribed({"marker": None}) is False
+
+
+# ---------------------------------------------------------------------------
+# Service tests: is_member_status (backward compatibility)
 # ---------------------------------------------------------------------------
 
 
@@ -109,11 +144,6 @@ async def test_is_member_status_left():
 
 
 @pytest.mark.asyncio
-async def test_is_member_status_kicked():
-    assert subscription_service.is_member_status({"status": "kicked"}) is False
-
-
-@pytest.mark.asyncio
 async def test_is_member_status_none():
     assert subscription_service.is_member_status(None) is False
 
@@ -121,11 +151,6 @@ async def test_is_member_status_none():
 @pytest.mark.asyncio
 async def test_is_member_status_empty_dict():
     assert subscription_service.is_member_status({}) is False
-
-
-@pytest.mark.asyncio
-async def test_is_member_status_unknown_status():
-    assert subscription_service.is_member_status({"status": "something_else"}) is False
 
 
 # ---------------------------------------------------------------------------
@@ -153,11 +178,11 @@ async def test_subscription_gate_disabled_starts_checkout(async_engine, monkeypa
 
 @pytest.mark.asyncio
 async def test_subscription_subscribed_starts_checkout(async_engine, monkeypatch):
-    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "@test_channel")
+    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "123456")
     monkeypatch.setenv("MAX_REQUIRED_CHANNEL_URL", "https://max.ru/channel")
 
     await _make_user_with_cart(async_engine, "902")
-    client = FakeClient(member_response={"status": "member"})
+    client = FakeClient(member_response={"members": [{"user_id": 902}]})
     await order_handler.start_checkout(client, chat_id=1, user_id="902", message_id="msg_1")
 
     assert len(client.calls) == 1
@@ -165,12 +190,12 @@ async def test_subscription_subscribed_starts_checkout(async_engine, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_subscription_admin_status_starts_checkout(async_engine, monkeypatch):
-    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "@test_channel")
+async def test_subscription_admin_member_starts_checkout(async_engine, monkeypatch):
+    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "123456")
     monkeypatch.setenv("MAX_REQUIRED_CHANNEL_URL", "")
 
     await _make_user_with_cart(async_engine, "903")
-    client = FakeClient(member_response={"status": "administrator"})
+    client = FakeClient(member_response={"members": [{"user_id": 903, "is_admin": True}]})
     await order_handler.start_checkout(client, chat_id=1, user_id="903", message_id="msg_1")
 
     assert len(client.calls) == 1
@@ -184,11 +209,11 @@ async def test_subscription_admin_status_starts_checkout(async_engine, monkeypat
 
 @pytest.mark.asyncio
 async def test_subscription_not_subscribed_shows_gate(async_engine, monkeypatch):
-    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "@test_channel")
+    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "123456")
     monkeypatch.setenv("MAX_REQUIRED_CHANNEL_URL", "https://max.ru/channel")
 
     await _make_user_with_cart(async_engine, "904")
-    client = FakeClient(member_response={"status": "left"})
+    client = FakeClient(member_response={"members": []})
     await order_handler.start_checkout(client, chat_id=1, user_id="904", message_id="msg_1")
 
     assert len(client.calls) == 1
@@ -199,7 +224,7 @@ async def test_subscription_not_subscribed_shows_gate(async_engine, monkeypatch)
 
 @pytest.mark.asyncio
 async def test_subscription_none_response_shows_gate(async_engine, monkeypatch):
-    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "@test_channel")
+    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "123456")
     monkeypatch.setenv("MAX_REQUIRED_CHANNEL_URL", "")
 
     await _make_user_with_cart(async_engine, "905")
@@ -217,11 +242,11 @@ async def test_subscription_none_response_shows_gate(async_engine, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_subscription_check_retry_subscribed_starts_checkout(async_engine, monkeypatch):
-    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "@test_channel")
+    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "123456")
     monkeypatch.setenv("MAX_REQUIRED_CHANNEL_URL", "")
 
     await _make_user_with_cart(async_engine, "906")
-    client = FakeClient(member_response={"status": "member"})
+    client = FakeClient(member_response={"members": [{"user_id": 906}]})
     await subscription_handler.check_subscription(client, chat_id=1, user_id="906", message_id="msg_1")
 
     assert any("Шаг 1/4" in c.get("text", "") for c in client.calls)
@@ -229,15 +254,34 @@ async def test_subscription_check_retry_subscribed_starts_checkout(async_engine,
 
 @pytest.mark.asyncio
 async def test_subscription_check_retry_not_subscribed_keeps_gate(async_engine, monkeypatch):
-    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "@test_channel")
+    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "123456")
     monkeypatch.setenv("MAX_REQUIRED_CHANNEL_URL", "")
 
     await _make_user_with_cart(async_engine, "907")
-    client = FakeClient(member_response={"status": "left"})
+    client = FakeClient(member_response={"members": []})
     await subscription_handler.check_subscription(client, chat_id=1, user_id="907", message_id="msg_1")
 
     assert any("пока не видим подписку" in c.get("text", "") for c in client.calls)
     assert any("sub:check" in str(c.get("reply_markup", "")) for c in client.calls)
+
+
+# ---------------------------------------------------------------------------
+# Handler tests: gate text contains discount
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_subscription_gate_text_contains_discount(async_engine, monkeypatch):
+    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "123456")
+    monkeypatch.setenv("MAX_REQUIRED_CHANNEL_URL", "https://max.ru/channel")
+
+    await _make_user_with_cart(async_engine, "908")
+    client = FakeClient(member_response={"members": []})
+    await order_handler.start_checkout(client, chat_id=1, user_id="908", message_id="msg_1")
+
+    text = client.calls[0]["text"]
+    assert "скидку 10%" in text
+    assert "менеджеру" in text
 
 
 # ---------------------------------------------------------------------------

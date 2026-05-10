@@ -31,7 +31,7 @@ class FakeClient:
         self.calls.append({"method": "delete_message", "chat_id": chat_id, "message_id": message_id})
 
     async def get_chat_member(self, chat_id, user_id):
-        return {"status": "member"}
+        return {"members": [{"user_id": int(user_id)}]}
 
     async def close(self):
         pass

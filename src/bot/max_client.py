@@ -192,7 +192,7 @@ class MAXClient:
 
     async def get_chat_member(self, chat_id: int | str, user_id: int | str) -> dict[str, Any] | None:
         try:
-            r = await self._client.get(f"/chats/{chat_id}/members/{user_id}")
+            r = await self._client.get(f"/chats/{chat_id}/members", params={"user_ids": str(user_id)})
             r.raise_for_status()
             return cast(dict[str, Any], r.json())
         except httpx.HTTPStatusError:

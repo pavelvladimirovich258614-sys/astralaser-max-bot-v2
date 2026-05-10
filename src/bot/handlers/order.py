@@ -62,12 +62,16 @@ async def start_checkout(
                 except Exception:
                     logger.warning("get_chat_member failed for channel=%s user=%s", channel, user_id, exc_info=True)
                     member = None
-                if not subscription_service.is_member_status(member):
+                if not subscription_service.is_subscribed(member):
                     channel_url = settings.max_required_channel_url.strip()
-                    gate_text = "📢 Чтобы оформить заказ, подпишитесь на наш канал в MAX\n\nТам скидки, новинки и идеи гравировок."
+                    gate_text = "📢 Чтобы оформить заказ, подпишитесь на наш канал в MAX"
                     if channel_url:
                         gate_text += f"\n\n🌐 Канал: {channel_url}"
-                    gate_text += "\n\nПосле подписки нажмите «✅ Я подписался»."
+                    gate_text += (
+                        "\n\n🎁 Подписчикам канала даём скидку 10%."
+                        "\nПосле подписки скажите менеджеру, что вы подписаны на канал, чтобы скидку учли."
+                        "\n\nПосле подписки нажмите «✅ Я подписался»."
+                    )
                     keyboard = subscription_gate_keyboard(channel_url)
                     if message_id:
                         await client.edit_message(chat_id, message_id, gate_text, reply_markup=keyboard)
