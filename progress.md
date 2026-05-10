@@ -4,11 +4,73 @@
 
 ## Current Verified State
 
-**Статус проекта:** F08 completed → F09 todo
+**Статус проекта:** F09 in progress (OPS checkpoint)
 **Последняя закрытая фича:** F08 — Менеджер и помощь
-**Следующая фича по дорожной карте:** F09 — Проверка подписки на канал
-**Последний коммит:** `feat(F08): add manager and help screens`
-**Тесты:** 152 passed
+**Текущая фича:** F09 — Проверка подписки на канал
+**Последний коммит:** `wip(F09): fix MAX membership API parsing`
+**Тесты:** 177 passed (на rescue-ветке)
+**Блокер:** внешний health через https://astralaser.ai-agent-paul.ru:443 не проходит (domain/VPS/nginx/firewall)
+
+---
+
+## Session Record — 2026-05-10 (F09 OPS checkpoint)
+
+**Agent:** GLM-5.1 (Z.AI Coding Plan / OpenCode)
+**Feature:** F09 — Проверка подписки на канал
+**Status:** OPS checkpoint — channel admin access resolved, Live-test B blocked by domain/VPS 443 issue
+
+### Summary
+
+- Клиент добавил бота в MAX-канал «Astralaser - украшения с гравировкой» и выдал права администратора.
+- `GET /chats` вернул 1 канал: numeric chat_id **`-73902066119981`**, link `https://max.ru/id300400568340_biz`.
+- `.env` обновлён локально:
+  - `MAX_REQUIRED_CHANNEL=-73902066119981`
+  - `MAX_REQUIRED_CHANNEL_URL=https://max.ru/id300400568340_biz`
+  - `.env` в `.gitignore`, не коммитится.
+- Uvicorn стартует успешно на `0.0.0.0:8080`.
+- Webhook подписывается успешно: `POST /subscriptions` → 200 OK.
+- SSH-вход на VPS проверен: `SSH_OK`, hostname `nl-vmnano`.
+- SSH reverse tunnel поднят: `ssh -v -o ExitOnForwardFailure=yes -N -R 8090:127.0.0.1:8080 root@82.26.151.81`.
+- Туннель подтверждён: `remote forward success for: listen 8090, connect 127.0.0.1:8080`.
+- **Внешний health не проходит**: `curl.exe https://astralaser.ai-agent-paul.ru/health` → `curl: (7) Failed to connect to astralaser.ai-agent-paul.ru port 443 after 2653 ms: Could not connect to server`.
+- Блокер не в коде F09, не в uvicorn, не в MAX API и не в SSH-туннеле. Блокер на участке: домен / nginx на VPS / порт 443 / firewall / DNS.
+- Live-test B в MAX **не проводился**.
+- F09 **не закрыта**.
+
+### Evidence
+
+- `GET /chats`: 200 OK, 1 канал найден.
+- chat_id: `-73902066119981`.
+- channel URL: `https://max.ru/id300400568340_biz`.
+- uvicorn startup: OK.
+- webhook subscribe: 200 OK.
+- SSH login: `SSH_OK`, hostname `nl-vmnano`.
+- reverse tunnel: `remote forward success for listen 8090, connect 127.0.0.1:8080`.
+- public health: **failed** to connect to `astralaser.ai-agent-paul.ru:443`.
+
+### Next steps
+
+1. Поднять uvicorn.
+2. Поднять SSH reverse tunnel.
+3. Проверить связность:
+   - `Test-NetConnection astralaser.ai-agent-paul.ru -Port 443`
+   - `Test-NetConnection 82.26.151.81 -Port 443`
+   - `nslookup astralaser.ai-agent-paul.ru`
+4. Зайти на VPS и проверить:
+   - `systemctl status nginx`
+   - `nginx -t`
+   - `ss -tulpn | grep ':443'`
+   - `ufw status`
+   - `curl -I http://127.0.0.1:8090/health`
+   - `curl -I http://127.0.0.1/health`
+   - `curl -k -I https://127.0.0.1/health`
+5. После восстановления домена и 443 провести Live-test B:
+   - неподписанный пользователь видит gate;
+   - кнопка ✅ Я подписался без подписки не запускает FSM;
+   - после подписки кнопка ✅ Я подписался запускает Шаг 1/4;
+   - подписанный пользователь сразу проходит в checkout;
+   - в логах нет 500 / traceback / ERROR.
+6. Только после успешного Live-test B финализировать F09.
 
 ---
 
