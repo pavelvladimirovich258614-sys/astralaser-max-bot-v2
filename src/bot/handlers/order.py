@@ -10,11 +10,12 @@ from src.bot.keyboards import (
     order_confirmed_keyboard,
     order_ready_keyboard,
     order_summary_keyboard,
+    subscription_gate_keyboard,
 )
 from src.bot.max_client import MAXClient
 from src.config import get_settings
 from src.db.engine import async_session_maker
-from src.services import cart_service, fsm_service, order_service, user_service
+from src.services import cart_service, fsm_service, order_service, subscription_service, user_service
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,27 @@ async def start_checkout(
             text = "🛒 Корзина пуста.\n\nВы можете перейти в каталог и выбрать изделие с гравировкой."
             keyboard = empty_cart_keyboard()
         else:
+            settings = get_settings()
+            channel = settings.max_required_channel.strip()
+            if channel:
+                try:
+                    member = await client.get_chat_member(channel, user_id)
+                except Exception:
+                    logger.warning("get_chat_member failed for channel=%s user=%s", channel, user_id, exc_info=True)
+                    member = None
+                if not subscription_service.is_member_status(member):
+                    channel_url = settings.max_required_channel_url.strip()
+                    gate_text = "📢 Чтобы оформить заказ, подпишитесь на наш канал в MAX\n\nТам скидки, новинки и идеи гравировок."
+                    if channel_url:
+                        gate_text += f"\n\n🌐 Канал: {channel_url}"
+                    gate_text += "\n\nПосле подписки нажмите «✅ Я подписался»."
+                    keyboard = subscription_gate_keyboard(channel_url)
+                    if message_id:
+                        await client.edit_message(chat_id, message_id, gate_text, reply_markup=keyboard)
+                    else:
+                        await client.send_message(chat_id, gate_text, reply_markup=keyboard)
+                    return
+
             await fsm_service.set_waiting_name(session, user.id)
             await session.commit()
             text = (

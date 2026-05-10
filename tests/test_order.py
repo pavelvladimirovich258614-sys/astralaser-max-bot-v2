@@ -70,6 +70,9 @@ class RecordingClient:
         self.calls.append({"method": "delete_message", "chat_id": chat_id, "message_id": message_id})
         return self.delete_returns
 
+    async def get_chat_member(self, chat_id, user_id):
+        return {"status": "member"}
+
 
 @pytest.mark.asyncio
 async def test_fsm_service_set_waiting_name(db_session):

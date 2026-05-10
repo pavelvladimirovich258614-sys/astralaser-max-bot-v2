@@ -10,6 +10,7 @@ from src.bot.handlers import catalog as catalog_handler
 from src.bot.handlers import info as info_handler
 from src.bot.handlers import order as order_handler
 from src.bot.handlers import start as start_handler
+from src.bot.handlers import subscription as subscription_handler
 from src.bot.max_client import MAXClient
 from src.db.engine import async_session_maker
 from src.services import fsm_service, user_service
@@ -126,6 +127,10 @@ class UpdateRouter:
 
         if data == "menu:orders":
             await self.client.edit_message(chat_id, message_id, "📦 Мои заказы — скоро.")
+            return
+
+        if data == "sub:check":
+            await subscription_handler.check_subscription(self.client, chat_id, user_id, message_id)
             return
 
         if data == "checkout":
