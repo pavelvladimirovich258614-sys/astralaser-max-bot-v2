@@ -452,3 +452,31 @@ async def test_router_callback_order_confirm_routes_to_order_handler(router, asy
 
     await r.process(_make_callback_payload("order:confirm", user_id="803"))
     assert any("Заказ оформлен" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_menu_contact(router):
+    r, client = router
+    await r.process(_make_callback_payload("menu:contact"))
+    assert any("Связаться с менеджером" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_menu_help(router):
+    r, client = router
+    await r.process(_make_callback_payload("menu:help"))
+    assert any("❓ Помощь" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_command_contact(router):
+    r, client = router
+    await r.process(_make_message_payload("/contact"))
+    assert any("Связаться с менеджером" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_command_help(router):
+    r, client = router
+    await r.process(_make_message_payload("/help"))
+    assert any("❓ Помощь" in c.get("text", "") for c in client.calls)

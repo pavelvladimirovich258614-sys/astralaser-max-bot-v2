@@ -140,3 +140,21 @@ def order_confirmed_keyboard() -> list[list[dict[str, Any]]]:
     return [
         [{"type": "callback", "text": "🏠 Главная", "payload": "home"}],
     ]
+
+
+def contact_keyboard(phone: str = "", vk_link: str = "", max_link: str = "") -> list[list[dict[str, Any]]]:
+    """Клавиатура экрана контактов. Ссылки показаны текстом, навигация — callback."""
+    return [
+        [{"type": "callback", "text": "🏠 Главная", "payload": "home"}],
+    ]
+
+
+def help_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура экрана помощи."""
+    return [
+        [
+            {"type": "callback", "text": "📚 Каталог", "payload": "menu:catalog"},
+            {"type": "callback", "text": "🛒 Корзина", "payload": "menu:cart"},
+        ],
+        [{"type": "callback", "text": "🏠 Главная", "payload": "home"}],
+    ]

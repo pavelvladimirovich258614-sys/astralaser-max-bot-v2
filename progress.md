@@ -4,11 +4,53 @@
 
 ## Current Verified State
 
-**Статус проекта:** F07 completed → F08 todo
-**Последняя закрытая фича:** F07 — Оформление заказа (FSM)
-**Следующая фича по дорожной карте:** F08 — Менеджер и помощь
-**Последний коммит:** `feat(F07): notify managers after order confirmation`
-**Тесты:** 137 passed
+**Статус проекта:** F08 completed → F09 todo
+**Последняя закрытая фича:** F08 — Менеджер и помощь
+**Следующая фича по дорожной карте:** F09 — Проверка подписки на канал
+**Последний коммит:** `feat(F08): add manager and help screens`
+**Тесты:** 152 passed
+
+---
+
+## Session Record — 2026-05-10 (F08 completed after live-test)
+
+**Agent:** GLM-5.1 (Z.AI Coding Plan / OpenCode)
+**Feature:** F08 — Менеджер и помощь
+**Status:** completed
+
+### What was done
+
+- Создан `src/bot/handlers/info.py` с хендлерами `show_contact` и `show_help`.
+- Экран «💬 Менеджер»: телефон, VK, MAX-ссылка менеджера, рабочие часы, блок «🌐 Наши площадки» (MAX-канал, VK, Ozon, Wildberries). Пустые поля и ссылки не отображаются.
+- Экран «❓ Помощь»: список команд (/start, /catalog, /cart, /contact, /help), инструкция по оформлению заказа (6 шагов), срок изготовления, доставка СДЭК.
+- Callback `menu:contact` → `info_handler.show_contact`, callback `menu:help` → `info_handler.show_help`.
+- Команды `/contact` и `/help` добавлены в `_handle_message` router.py.
+- Заглушки `menu:contact` и `menu:help` заменены на реальные хендлеры. Заглушка `menu:orders` оставлена.
+- Добавлены клавиатуры `contact_keyboard` и `help_keyboard` в `src/bot/keyboards.py`.
+- `src/config.py`: добавлены `max_channel_link`, `ozon_link`, `wildberries_link`.
+- 11 тестов в `tests/test_info.py`, 4 routing-теста в `tests/test_router.py`.
+
+### Evidence
+
+- pytest: 152 passed ✅
+- ruff: exit 0 ✅
+- mypy: `Success: no issues found in 32 source files` ✅
+- Live-test MAX:
+  - 💬 Менеджер открывается, /contact работает ✅
+  - Контакты и площадки отображаются ✅
+  - ❓ Помощь открывается, /help работает ✅
+  - Команды и инструкция по заказу отображаются ✅
+  - 500 / traceback / ERROR — нет ✅
+
+### Known follow-ups
+
+- Добавить ссылку на MAX-профиль / личку клиента в админское уведомление заказа (не F08).
+- Добавить второго админа в MAX_ADMIN_CHAT_IDS после получения его recipient.chat_id (не F08).
+- Проверить link-кнопки MAX для красивых кнопок площадок вместо текстовых ссылок (не F08).
+
+### Next best action
+
+Начать F09 — Проверка подписки на канал. Не начинать без отдельного CONTEXT RECOVERY / PLAN-этапа.
 
 ---
 

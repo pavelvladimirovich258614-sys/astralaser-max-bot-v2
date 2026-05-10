@@ -7,6 +7,7 @@ from typing import Any
 
 from src.bot.handlers import cart as cart_handler
 from src.bot.handlers import catalog as catalog_handler
+from src.bot.handlers import info as info_handler
 from src.bot.handlers import order as order_handler
 from src.bot.handlers import start as start_handler
 from src.bot.max_client import MAXClient
@@ -66,6 +67,10 @@ class UpdateRouter:
             await catalog_handler.show_catalog(self.client, chat_id)
         elif text.startswith("/cart"):
             await cart_handler.show_cart(self.client, chat_id, user_id)
+        elif text.startswith("/contact"):
+            await info_handler.show_contact(self.client, chat_id)
+        elif text.startswith("/help"):
+            await info_handler.show_help(self.client, chat_id)
 
     async def _handle_callback(self, payload: dict[str, Any]) -> None:
         cb = payload.get("callback", {})
@@ -111,14 +116,16 @@ class UpdateRouter:
             await cart_handler.show_cart(self.client, chat_id, user_id, message_id)
             return
 
-        # Заглушки для не реализованных разделов главного меню
-        if data in ("menu:orders", "menu:help", "menu:contact"):
-            stub_text = {
-                "menu:orders": "📦 Мои заказы — скоро.",
-                "menu:help": "❓ Помощь — скоро.",
-                "menu:contact": "💬 Менеджер — скоро.",
-            }.get(data, "Раздел в разработке.")
-            await self.client.edit_message(chat_id, message_id, stub_text)
+        if data == "menu:contact":
+            await info_handler.show_contact(self.client, chat_id, message_id)
+            return
+
+        if data == "menu:help":
+            await info_handler.show_help(self.client, chat_id, message_id)
+            return
+
+        if data == "menu:orders":
+            await self.client.edit_message(chat_id, message_id, "📦 Мои заказы — скоро.")
             return
 
         if data == "checkout":

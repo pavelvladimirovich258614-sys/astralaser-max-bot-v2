@@ -137,13 +137,15 @@
     {
       "id": "F08",
       "name": "Менеджер и помощь",
-      "status": "todo",
+      "status": "completed",
+      "completed_at": "2026-05-10",
+      "evidence": "pytest: 152 passed, ruff: exit 0, mypy: clean, init.ps1: READY, live-test MAX: contact/help screens passed",
       "depends_on": ["F07"],
       "acceptance_criteria": [
-        "/contact и [💬 Менеджер] показывают: телефон, VK, MAX-ссылку (если задана), часы работы",
+        "/contact и [💬 Менеджер] показывают: телефон, VK, MAX-ссылку, часы работы, площадки",
         "Inline кнопки: [📱 Позвонить] [🌐 VK] [💬 MAX] [🏠 Главная]",
         "/help и [❓ Помощь] показывают список команд и инструкцию по заказу",
-        "Тесты test_handlers.py покрывают /contact и /help"
+        "Тесты test_info.py покрывают /contact и /help"
       ]
     },
     {
