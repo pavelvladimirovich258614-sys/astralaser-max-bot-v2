@@ -517,6 +517,41 @@ async def test_router_callback_admin_orders(router, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_router_callback_admin_order_detail(router, monkeypatch):
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+    # Используем order_id=99999, которого точно нет в БД тестов
+    await r.process(_make_callback_payload("admin:order:99999", user_id="123"))
+    assert any("Заказ не найден" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_order_status(router, monkeypatch):
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+    # Используем order_id=99999, которого точно нет в БД тестов
+    await r.process(_make_callback_payload("admin:order_status:99999:confirmed", user_id="123"))
+    assert any("Заказ не найден" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_order_invalid_payload(router, monkeypatch):
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+    # Невалидный order_id — не должно вызывать handler
+    await r.process(_make_callback_payload("admin:order:abc", user_id="123"))
+    assert len(client.calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_order_status_invalid_status(router, monkeypatch):
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+    await r.process(_make_callback_payload("admin:order_status:1:bogus", user_id="123"))
+    assert any("Неизвестный статус" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
 async def test_router_callback_admin_exit(router, monkeypatch):
     r, client = router
     monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())

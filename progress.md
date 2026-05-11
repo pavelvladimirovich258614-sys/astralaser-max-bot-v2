@@ -4,12 +4,61 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10.1 implemented, live-test passed, ready for finalize
+**Статус проекта:** F10.2 implemented, live-test passed, committed, pushed
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (F10.1 live-test passed)
-**Последний коммит:** `26e492b docs(F10): record admin panel staged plan` (до коммита F10.1)
-**Тесты:** 198 passed
+**Текущая фича:** F10 — Админ-панель (F10.2 live-test passed)
+**Последний коммит:** `feat(F10.2): add admin order management`
+**Тесты:** 222 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-12 (F10.2 implemented)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10.2 — Управление заказами в админ-панели
+**Status:** implemented → awaiting human verification
+
+### What was done
+
+- `src/services/admin_service.py`: создан — `get_recent_orders`, `get_order_detail`, `update_order_status`, `status_emoji`, `status_label`.
+- `src/bot/handlers/admin.py`: `admin_orders` заменён skeleton на реальный список; добавлены `show_orders_list`, `show_order_detail`, `admin_order_status`.
+- `src/bot/keyboards.py`: добавлены `admin_orders_keyboard`, `admin_order_detail_keyboard`, `admin_orders_back_keyboard`.
+- `src/bot/router.py`: routing `admin:order:{id}` и `admin:order_status:{id}:{status}`.
+- `tests/test_admin_service.py`: создан — 12 тестов (список, детали, смена статуса, хелперы).
+- `tests/test_admin.py`: +9 тестов (список, карточка, смена статуса, доступ, кнопки).
+- `tests/test_router.py`: +4 routing-теста (detail, status, invalid payload, invalid status).
+
+### Evidence
+
+- pytest: 222 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success (1 pre-existing webhook.py:23 only) ✅
+- init.ps1: READY ✅
+- Live-test MAX:
+  - admin:orders показывает список последних заказов ✅
+  - admin:order:{id} открывает карточку заказа ✅
+  - Карточка показывает клиента, телефон, адрес, товары, итог, notes ✅
+  - admin:order_status:{id}:confirmed меняет pending → confirmed ✅
+  - admin:order_status:{id}:completed меняет confirmed → completed ✅
+  - После completed кнопки смены статуса скрываются ✅
+  - 🔙 Назад из карточки возвращает в список заказов ✅
+  - 🔙 Назад из списка возвращает в админ-панель ✅
+  - Обычный пользователь не получает доступ ✅
+  - Ошибок 400/500/traceback нет ✅
+- F10.3–F10.5: не начаты ✅
+- БД/миграции/seed/.env: не изменены ✅
+
+### Guardrails respected
+
+- Не реализованы F10.3–F10.5.
+- Нет admin FSM.
+- Нет изменений БД, миграций, seed, `.env`.
+
+### Next best action
+
+1. Человек обновляет `feature_list.json` (F10.2 evidence) после verification.
+2. Приступить к F10.3 (Products CRUD) по explicit approve.
 
 ---
 

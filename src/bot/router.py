@@ -181,6 +181,27 @@ class UpdateRouter:
         if data.startswith("admin:"):
             if data == "admin:orders":
                 await admin_handler.admin_orders(self.client, chat_id, user_id, message_id)
+            elif data.startswith("admin:order_status:"):
+                parts = data.split(":")
+                if len(parts) == 4:
+                    try:
+                        order_id = int(parts[2])
+                        status = parts[3]
+                    except ValueError:
+                        return
+                    await admin_handler.admin_order_status(
+                        self.client, chat_id, user_id, order_id, status, message_id
+                    )
+            elif data.startswith("admin:order:"):
+                parts = data.split(":")
+                if len(parts) == 3:
+                    try:
+                        order_id = int(parts[2])
+                    except ValueError:
+                        return
+                    await admin_handler.show_order_detail(
+                        self.client, chat_id, user_id, order_id, message_id
+                    )
             elif data == "admin:products":
                 await admin_handler.admin_products(self.client, chat_id, user_id, message_id)
             elif data == "admin:categories":

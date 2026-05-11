@@ -182,3 +182,41 @@ def admin_back_keyboard() -> list[list[dict[str, Any]]]:
     return [
         [{"type": "callback", "text": "🔙 Назад", "payload": "admin:back"}],
     ]
+
+
+def admin_orders_keyboard(orders: list[Any]) -> list[list[dict[str, Any]]]:
+    """Клавиатура списка заказов: каждый заказ — кнопка + назад в админ-панель."""
+    from src.services.admin_service import status_emoji
+
+    buttons: list[list[dict[str, Any]]] = []
+    for order in orders:
+        text = f"#{order.id} {status_emoji(order.status)} {order.total_amount} ₽"
+        buttons.append([{"type": "callback", "text": text, "payload": f"admin:order:{order.id}"}])
+    buttons.append([{"type": "callback", "text": "🔙 Назад", "payload": "admin:back"}])
+    return buttons
+
+
+def admin_order_detail_keyboard(order_id: int, status: str) -> list[list[dict[str, Any]]]:
+    """Клавиатура карточки заказа: кнопки смены статуса + назад к списку."""
+    buttons: list[list[dict[str, Any]]] = []
+
+    if status == "pending":
+        buttons.append([
+            {"type": "callback", "text": "✅ Подтвердить", "payload": f"admin:order_status:{order_id}:confirmed"},
+            {"type": "callback", "text": "❌ Отменить", "payload": f"admin:order_status:{order_id}:cancelled"},
+        ])
+    elif status == "confirmed":
+        buttons.append([
+            {"type": "callback", "text": "🏁 Завершить", "payload": f"admin:order_status:{order_id}:completed"},
+            {"type": "callback", "text": "❌ Отменить", "payload": f"admin:order_status:{order_id}:cancelled"},
+        ])
+
+    buttons.append([{"type": "callback", "text": "🔙 Назад", "payload": "admin:orders"}])
+    return buttons
+
+
+def admin_orders_back_keyboard() -> list[list[dict[str, Any]]]:
+    """Кнопка назад к списку заказов."""
+    return [
+        [{"type": "callback", "text": "🔙 Назад", "payload": "admin:orders"}],
+    ]

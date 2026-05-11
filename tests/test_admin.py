@@ -1,10 +1,14 @@
 from typing import Any
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from src.bot.handlers import admin as admin_handler
 from src.bot.handlers import start as start_handler
 from src.bot.keyboards import admin_menu_keyboard
+from src.db.models import Base, Order, OrderItem, User
 
 
 class RecordingClient:
@@ -21,6 +25,44 @@ class RecordingClient:
 @pytest.fixture(autouse=True)
 def set_token(monkeypatch):
     monkeypatch.setenv("MAX_BOT_TOKEN", "test_token")
+
+
+@pytest.fixture(scope="session")
+def async_engine():
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        poolclass=StaticPool,
+        future=True,
+    )
+    return engine
+
+
+@pytest.fixture
+async def db_session(async_engine):
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async_session = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
+        yield session
+        await session.rollback()
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest.fixture(autouse=True)
+async def override_admin_session_maker(monkeypatch, async_engine):
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(admin_handler, "async_session_maker", test_session_maker)
+
+    yield
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
 
 
 def _make_settings(admin_ids: list[str]):
@@ -82,7 +124,7 @@ async def test_admin_menu_has_all_buttons():
 
 @pytest.mark.asyncio
 async def test_admin_skeleton_callbacks_require_admin_access(monkeypatch):
-    """Обычный пользователь не видит placeholder при admin:* callback."""
+    """Обычный пользователь не видит экран при admin:* callback."""
     monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
     client = RecordingClient()
     await admin_handler.admin_orders(client, chat_id=1, user_id="99999", message_id="msg_1")
@@ -91,12 +133,9 @@ async def test_admin_skeleton_callbacks_require_admin_access(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_admin_skeleton_callbacks_show_placeholders(monkeypatch):
-    """Админ видит placeholder-экраны для всех skeleton callbacks."""
+    """Админ видит placeholder-экраны для оставшихся skeleton callbacks."""
     monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
     client = RecordingClient()
-
-    await admin_handler.admin_orders(client, chat_id=1, user_id="4147438", message_id="msg_1")
-    assert any("📦 Заказы" in c["text"] for c in client.calls)
 
     await admin_handler.admin_products(client, chat_id=1, user_id="4147438", message_id="msg_1")
     assert any("📚 Товары" in c["text"] for c in client.calls)
@@ -109,6 +148,244 @@ async def test_admin_skeleton_callbacks_show_placeholders(monkeypatch):
 
     await admin_handler.admin_broadcast(client, chat_id=1, user_id="4147438", message_id="msg_1")
     assert any("📤 Рассылка" in c["text"] for c in client.calls)
+
+
+# ---------------------------------------------------------------------------
+# Orders list tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_orders_empty_shows_placeholder(monkeypatch, db_session):
+    """При пустом списке заказов показывается placeholder."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+    client = RecordingClient()
+    await admin_handler.admin_orders(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    assert "Заказов пока нет" in client.calls[0]["text"]
+    assert any(b["payload"] == "admin:back" for row in client.calls[0]["reply_markup"] for b in row)
+
+
+@pytest.mark.asyncio
+async def test_admin_orders_shows_recent_orders(monkeypatch, db_session):
+    """Список заказов показывает кнопки с номерами, статусами и суммами."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="500", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+
+    order = Order(
+        user_id=user.id,
+        customer_name="Иван",
+        customer_phone="+7",
+        delivery_address="Адрес",
+        total_amount=840,
+        status="pending",
+    )
+    db_session.add(order)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.admin_orders(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert "📦 Заказы" in call["text"]
+    assert any(f"admin:order:{order.id}" in b["payload"] for row in call["reply_markup"] for b in row)
+
+
+# ---------------------------------------------------------------------------
+# Order detail tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_order_detail_shows_customer_items_total_and_notes(monkeypatch, db_session):
+    """Карточка заказа содержит клиента, товары, итог и комментарий."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="600", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+
+    order = Order(
+        user_id=user.id,
+        customer_name="Иван Иванов",
+        customer_phone="+7 999 123 45 67",
+        delivery_address="Москва, ул. Ленина 1",
+        total_amount=840,
+        status="pending",
+        notes="Гравировка: Love",
+    )
+    db_session.add(order)
+    await db_session.flush()
+
+    item = OrderItem(
+        order_id=order.id,
+        product_id=1,
+        product_title_snapshot="Кулон-столбик",
+        price_snapshot=840,
+        quantity=1,
+    )
+    db_session.add(item)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.show_order_detail(client, chat_id=1, user_id="4147438", order_id=order.id, message_id="msg_1")
+
+    assert len(client.calls) == 1
+    text = client.calls[0]["text"]
+    assert f"Заказ #{order.id}" in text
+    assert "Иван Иванов" in text
+    assert "+7 999 123 45 67" in text
+    assert "Москва, ул. Ленина 1" in text
+    assert "Кулон-столбик" in text
+    assert "840 ₽" in text
+    assert "Гравировка: Love" in text
+
+    # Кнопки смены статуса для pending
+    kb = client.calls[0]["reply_markup"]
+    assert any(b["payload"] == f"admin:order_status:{order.id}:confirmed" for row in kb for b in row)
+    assert any(b["payload"] == f"admin:order_status:{order.id}:cancelled" for row in kb for b in row)
+    assert any(b["payload"] == "admin:orders" for row in kb for b in row)
+
+
+@pytest.mark.asyncio
+async def test_admin_order_detail_missing_order_shows_not_found(monkeypatch, db_session):
+    """При несуществующем order_id показывается 'Заказ не найден.'"""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+    client = RecordingClient()
+    await admin_handler.show_order_detail(client, chat_id=1, user_id="4147438", order_id=99999, message_id="msg_1")
+
+    assert len(client.calls) == 1
+    assert "Заказ не найден" in client.calls[0]["text"]
+    assert any(b["payload"] == "admin:orders" for row in client.calls[0]["reply_markup"] for b in row)
+
+
+@pytest.mark.asyncio
+async def test_admin_order_detail_completed_no_status_buttons(monkeypatch, db_session):
+    """Для завершённого заказа нет кнопок смены статуса."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="601", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+
+    order = Order(
+        user_id=user.id,
+        customer_name="A",
+        customer_phone="+7",
+        delivery_address="Addr",
+        total_amount=100,
+        status="completed",
+    )
+    db_session.add(order)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.show_order_detail(client, chat_id=1, user_id="4147438", order_id=order.id, message_id="msg_1")
+
+    kb = client.calls[0]["reply_markup"]
+    payloads = [b["payload"] for row in kb for b in row]
+    assert "admin:orders" in payloads
+    assert not any("admin:order_status:" in p for p in payloads)
+
+
+# ---------------------------------------------------------------------------
+# Order status change tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_order_status_change_updates_and_rerenders_card(monkeypatch, db_session):
+    """Смена статуса обновляет заказ и перерисовывает карточку."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="700", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+
+    order = Order(
+        user_id=user.id,
+        customer_name="Иван",
+        customer_phone="+7",
+        delivery_address="Адрес",
+        total_amount=100,
+        status="pending",
+    )
+    db_session.add(order)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.admin_order_status(
+        client, chat_id=1, user_id="4147438", order_id=order.id, status="confirmed", message_id="msg_1"
+    )
+
+    assert len(client.calls) == 1
+    text = client.calls[0]["text"]
+    assert f"Заказ #{order.id}" in text
+    assert "Подтверждён" in text
+
+
+@pytest.mark.asyncio
+async def test_admin_order_status_unknown_status_shows_error(monkeypatch, db_session):
+    """Неизвестный статус показывает ошибку."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="701", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+
+    order = Order(
+        user_id=user.id,
+        customer_name="A",
+        customer_phone="+7",
+        delivery_address="Addr",
+        total_amount=100,
+        status="pending",
+    )
+    db_session.add(order)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.admin_order_status(
+        client, chat_id=1, user_id="4147438", order_id=order.id, status="bogus", message_id="msg_1"
+    )
+
+    assert len(client.calls) == 1
+    assert "Неизвестный статус" in client.calls[0]["text"]
+
+
+# ---------------------------------------------------------------------------
+# Access tests for order callbacks
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_order_callbacks_denied_for_regular_user(monkeypatch, db_session):
+    """Обычный пользователь не может открыть карточку заказа."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+    client = RecordingClient()
+
+    await admin_handler.show_order_detail(client, chat_id=1, user_id="99999", order_id=1, message_id="msg_1")
+    assert len(client.calls) == 0
+
+    await admin_handler.admin_order_status(client, chat_id=1, user_id="99999", order_id=1, status="confirmed", message_id="msg_1")
+    assert len(client.calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_admin_order_back_returns_to_orders_list(monkeypatch, db_session):
+    """Кнопка назад из списка заказов возвращает в админ-панель."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    # admin_back_to_menu уже протестирован, проверим что admin_orders_back_keyboard корректна
+    from src.bot.keyboards import admin_orders_back_keyboard
+    kb = admin_orders_back_keyboard()
+    payloads = [b["payload"] for row in kb for b in row]
+    assert "admin:orders" in payloads
 
 
 # ---------------------------------------------------------------------------

@@ -4,6 +4,8 @@ from src.bot import keyboards as kb
 from src.bot.handlers import start as start_handler
 from src.bot.max_client import MAXClient
 from src.config import get_settings
+from src.db.engine import async_session_maker
+from src.services import admin_service
 
 ADMIN_MENU_TEXT = """🛠 Админ-панель
 
@@ -77,14 +79,127 @@ async def admin_orders(
     user_id: int | str,
     message_id: str | None = None,
 ) -> None:
-    """📦 Заказы — placeholder (F10.2)."""
+    """📦 Заказы — показать список последних заказов (F10.2)."""
     if not _is_admin(user_id):
         return
-    text = "📦 Заказы — скоро."
-    if message_id:
-        await client.edit_message(chat_id, message_id, text, reply_markup=kb.admin_back_keyboard())
+    await show_orders_list(client, chat_id, message_id)
+
+
+async def show_orders_list(
+    client: MAXClient,
+    chat_id: int | str,
+    message_id: str | None = None,
+) -> None:
+    """Показать список последних заказов."""
+    async with async_session_maker() as session:
+        orders = await admin_service.get_recent_orders(session, limit=10)
+
+    if not orders:
+        text = "📦 Заказов пока нет."
+        keyboard = kb.admin_back_keyboard()
     else:
-        await client.send_message(chat_id, text, reply_markup=kb.admin_back_keyboard())
+        text = "📦 Заказы\n\nВыберите заказ:"
+        keyboard = kb.admin_orders_keyboard(orders)
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)
+
+
+async def show_order_detail(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    order_id: int,
+    message_id: str | None = None,
+) -> None:
+    """Показать карточку заказа."""
+    if not _is_admin(user_id):
+        return
+
+    async with async_session_maker() as session:
+        order = await admin_service.get_order_detail(session, order_id)
+
+    if order is None:
+        text = "Заказ не найден."
+        keyboard = kb.admin_orders_back_keyboard()
+        if message_id:
+            await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+        else:
+            await client.send_message(chat_id, text, reply_markup=keyboard)
+        return
+
+    lines = [f"📦 Заказ #{order.id}\n"]
+    lines.append(f"Статус: {admin_service.status_emoji(order.status)} {admin_service.status_label(order.status)}")
+    lines.append(f"Дата: {order.created_at.strftime('%d.%m.%Y %H:%M')}\n")
+    lines.append(f"👤 {order.customer_name}")
+    lines.append(f"📞 {order.customer_phone}")
+    lines.append(f"📍 {order.delivery_address}\n")
+
+    if order.items:
+        lines.append("🛍 Товары:")
+        for item in order.items:
+            lines.append(f"• {item.product_title_snapshot} × {item.quantity} — {item.price_snapshot} ₽")
+        lines.append("")
+
+    lines.append(f"💰 Итого: {order.total_amount} ₽")
+    if order.notes:
+        lines.append(f"✏️ Комментарий: {order.notes}")
+
+    text = "\n".join(lines)
+    keyboard = kb.admin_order_detail_keyboard(order.id, order.status)
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)
+
+
+async def admin_order_status(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    order_id: int,
+    status: str,
+    message_id: str | None = None,
+) -> None:
+    """Сменить статус заказа и показать обновлённую карточку."""
+    if not _is_admin(user_id):
+        return
+
+    # Проверить валидность статуса
+    if status not in admin_service.VALID_STATUSES:
+        text = "Неизвестный статус заказа."
+        keyboard = kb.admin_orders_back_keyboard()
+        if message_id:
+            await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+        else:
+            await client.send_message(chat_id, text, reply_markup=keyboard)
+        return
+
+    async with async_session_maker() as session:
+        order = await admin_service.get_order_detail(session, order_id)
+        if order is None:
+            text = "Заказ не найден."
+            keyboard = kb.admin_orders_back_keyboard()
+            if message_id:
+                await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+            else:
+                await client.send_message(chat_id, text, reply_markup=keyboard)
+            return
+
+        order = await admin_service.update_order_status(session, order_id, status)
+        if order is None:
+            text = "Заказ не найден."
+            keyboard = kb.admin_orders_back_keyboard()
+            if message_id:
+                await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+            else:
+                await client.send_message(chat_id, text, reply_markup=keyboard)
+            return
+
+    await show_order_detail(client, chat_id, user_id, order.id, message_id)
 
 
 async def admin_products(
