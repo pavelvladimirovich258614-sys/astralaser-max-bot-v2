@@ -4,12 +4,48 @@
 
 ## Current Verified State
 
-**Статус проекта:** F09 in progress (OPS checkpoint)
-**Последняя закрытая фича:** F08 — Менеджер и помощь
-**Текущая фича:** F09 — Проверка подписки на канал
-**Последний коммит:** `wip(F09): fix MAX membership API parsing`
-**Тесты:** 177 passed (на rescue-ветке)
-**Блокер:** внешний health через https://astralaser.ai-agent-paul.ru:443 не проходит (domain/VPS/nginx/firewall)
+**Статус проекта:** F09 completed after live-test B, awaiting human merge to main
+**Последняя закрытая фича:** F09 — Проверка подписки на канал
+**Текущая фича:** F09 — Проверка подписки на канал (completed, pending merge)
+**Последний коммит:** `fix(F09): add channel link to subscription retry`
+**Тесты:** 179 passed (на rescue-ветке)
+**Блокер:** нет
+
+---
+
+## Session Record — 2026-05-11 (F09 completed after live-test B)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F09 — Проверка подписки на канал
+**Status:** completed, live-test B passed
+
+### Summary
+
+- Subscription gate включён перед checkout.
+- Канал MAX подключён через numeric chat_id.
+- Бот добавлен в канал администратором.
+- Неподписанный пользователь видит gate.
+- Retry-сообщение содержит ссылку на канал.
+- Без подписки FSM не стартует.
+- После подписки retry запускает checkout FSM.
+- Подписанный пользователь проходит checkout сразу.
+- Ошибок 500 / traceback / ERROR в uvicorn нет.
+- Public health работает.
+
+### Evidence
+
+- MAX_REQUIRED_CHANNEL=-73902066119981
+- MAX_REQUIRED_CHANNEL_URL=https://max.ru/id300400568340_biz
+- pytest: 179 passed
+- ruff: clean
+- mypy: Success
+- init.ps1: OK
+- public health: {"status":"ok"}
+- Live-test B: passed
+
+### Next best action
+
+Человек обновляет `feature_list.json` (F09 → completed) и делает merge `rescue/f09-subscription-gate-wip` → `main`.
 
 ---
 
