@@ -30,6 +30,9 @@ class FakeClient:
     async def delete_message(self, chat_id, message_id):
         self.calls.append({"method": "delete_message", "chat_id": chat_id, "message_id": message_id})
 
+    async def get_chat_member(self, chat_id, user_id):
+        return {"members": [{"user_id": int(user_id)}]}
+
     async def close(self):
         pass
 
@@ -480,3 +483,10 @@ async def test_router_command_help(router):
     r, client = router
     await r.process(_make_message_payload("/help"))
     assert any("❓ Помощь" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_sub_check(router):
+    r, client = router
+    await r.process(_make_callback_payload("sub:check"))
+    assert len(client.calls) >= 1

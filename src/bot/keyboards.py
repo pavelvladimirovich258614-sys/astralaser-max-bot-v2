@@ -158,3 +158,11 @@ def help_keyboard() -> list[list[dict[str, Any]]]:
         ],
         [{"type": "callback", "text": "🏠 Главная", "payload": "home"}],
     ]
+
+
+def subscription_gate_keyboard(channel_url: str = "") -> list[list[dict[str, Any]]]:
+    """Клавиатура экрана подписки на канал."""
+    return [
+        [{"type": "callback", "text": "✅ Я подписался", "payload": "sub:check"}],
+        [{"type": "callback", "text": "🔙 Назад", "payload": "menu:cart"}],
+    ]

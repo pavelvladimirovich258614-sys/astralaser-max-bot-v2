@@ -301,7 +301,27 @@ async def test_get_chat_member_404_returns_none(set_token):
         return httpx.Response(404)
 
     client = MAXClient(http_client=_make_transport(handler))
-    result = await client.get_chat_member(chat_id="@channel", user_id=123)
+    result = await client.get_chat_member(chat_id=123456, user_id=789)
     await client.close()
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_chat_member_uses_correct_endpoint(set_token):
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["method"] = request.method
+        return httpx.Response(200, json={"members": [{"user_id": 789}], "marker": None})
+
+    client = MAXClient(http_client=_make_transport(handler))
+    result = await client.get_chat_member(chat_id=123456, user_id=789)
+    await client.close()
+
+    assert result is not None
+    assert result["members"] == [{"user_id": 789}]
+    assert captured["method"] == "GET"
+    assert "/chats/123456/members" in captured["url"]
+    assert "user_ids=789" in captured["url"]
