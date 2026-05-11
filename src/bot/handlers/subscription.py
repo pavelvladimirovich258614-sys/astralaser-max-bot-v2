@@ -30,6 +30,13 @@ def _build_gate_text(channel_url: str) -> str:
     return "".join(parts)
 
 
+def _build_retry_text(channel_url: str) -> str:
+    text = RETRY_TEXT
+    if channel_url:
+        text += f"\n\nПодписаться на канал:\n{channel_url}"
+    return text
+
+
 async def check_subscription(
     client: MAXClient,
     chat_id: int | str,
@@ -51,8 +58,9 @@ async def check_subscription(
     if subscription_service.is_subscribed(member):
         await order_handler.start_checkout(client, chat_id, user_id, message_id)
     else:
-        text = RETRY_TEXT
-        keyboard = subscription_gate_keyboard(settings.max_required_channel_url.strip())
+        channel_url = settings.max_required_channel_url.strip()
+        text = _build_retry_text(channel_url)
+        keyboard = subscription_gate_keyboard(channel_url)
         if message_id:
             await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
         else:

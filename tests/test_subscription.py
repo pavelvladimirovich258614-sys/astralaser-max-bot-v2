@@ -265,6 +265,34 @@ async def test_subscription_check_retry_not_subscribed_keeps_gate(async_engine, 
     assert any("sub:check" in str(c.get("reply_markup", "")) for c in client.calls)
 
 
+@pytest.mark.asyncio
+async def test_subscription_check_retry_not_subscribed_with_url(async_engine, monkeypatch):
+    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "123456")
+    monkeypatch.setenv("MAX_REQUIRED_CHANNEL_URL", "https://max.ru/channel")
+
+    await _make_user_with_cart(async_engine, "910")
+    client = FakeClient(member_response={"members": []})
+    await subscription_handler.check_subscription(client, chat_id=1, user_id="910", message_id="msg_1")
+
+    assert any("пока не видим подписку" in c.get("text", "") for c in client.calls)
+    assert any("https://max.ru/channel" in c.get("text", "") for c in client.calls)
+    assert any("sub:check" in str(c.get("reply_markup", "")) for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_subscription_check_retry_not_subscribed_without_url(async_engine, monkeypatch):
+    monkeypatch.setenv("MAX_REQUIRED_CHANNEL", "123456")
+    monkeypatch.setenv("MAX_REQUIRED_CHANNEL_URL", "")
+
+    await _make_user_with_cart(async_engine, "911")
+    client = FakeClient(member_response={"members": []})
+    await subscription_handler.check_subscription(client, chat_id=1, user_id="911", message_id="msg_1")
+
+    assert any("пока не видим подписку" in c.get("text", "") for c in client.calls)
+    assert not any("Подписаться на канал" in c.get("text", "") for c in client.calls)
+    assert any("sub:check" in str(c.get("reply_markup", "")) for c in client.calls)
+
+
 # ---------------------------------------------------------------------------
 # Handler tests: gate text contains discount
 # ---------------------------------------------------------------------------
