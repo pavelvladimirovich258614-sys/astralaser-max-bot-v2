@@ -43,6 +43,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         else:
             logger.warning("Failed to subscribe webhook")
 
+    commands = [
+        {"name": "start", "description": "Главное меню"},
+        {"name": "help", "description": "Помощь"},
+        {"name": "contact", "description": "Связаться с менеджером"},
+        {"name": "admin", "description": "Админ-панель"},
+    ]
+    await client.set_bot_commands(commands)
+
     yield
 
     await client.close()

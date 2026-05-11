@@ -166,3 +166,19 @@ def subscription_gate_keyboard(channel_url: str = "") -> list[list[dict[str, Any
         [{"type": "callback", "text": "✅ Я подписался", "payload": "sub:check"}],
         [{"type": "callback", "text": "🔙 Назад", "payload": "menu:cart"}],
     ]
+
+
+def admin_menu_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура главного меню админ-панели."""
+    return [
+        [{"type": "callback", "text": "📦 Заказы", "payload": "admin:orders"}, {"type": "callback", "text": "📚 Товары", "payload": "admin:products"}],
+        [{"type": "callback", "text": "🏷 Категории", "payload": "admin:categories"}, {"type": "callback", "text": "📊 Статистика", "payload": "admin:stats"}],
+        [{"type": "callback", "text": "📤 Рассылка", "payload": "admin:broadcast"}, {"type": "callback", "text": "🚪 Выход", "payload": "admin:exit"}],
+    ]
+
+
+def admin_back_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура для skeleton экранов админ-панели с кнопкой назад."""
+    return [
+        [{"type": "callback", "text": "🔙 Назад", "payload": "admin:back"}],
+    ]

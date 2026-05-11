@@ -198,6 +198,17 @@ class MAXClient:
         except httpx.HTTPStatusError:
             return None
 
+    async def set_bot_commands(self, commands: list[dict[str, str]]) -> bool:
+        """Регистрация slash-команд бота через PATCH /me."""
+        try:
+            r = await self._client.patch("/me", json={"commands": commands})
+            r.raise_for_status()
+            logger.info("Bot commands registered: %d commands", len(commands))
+            return True
+        except httpx.HTTPStatusError as e:
+            logger.warning("set_bot_commands failed: status=%s body=%s", e.response.status_code, e.response.text)
+            return False
+
     async def get_image_upload_url(self) -> str | None:
         try:
             r = await self._client.post("/uploads", params={"type": "image"})

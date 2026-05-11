@@ -4,12 +4,61 @@
 
 ## Current Verified State
 
-**Статус проекта:** F09 completed and merged into main, F10 staged plan recorded
+**Статус проекта:** F10.1 implemented, live-test passed, ready for finalize
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (staged plan approved, awaiting F10.1 implementation)
-**Последний коммит:** `ff4b717 merge(F09): subscription gate`
-**Тесты:** 179 passed
+**Текущая фича:** F10 — Админ-панель (F10.1 live-test passed)
+**Последний коммит:** `26e492b docs(F10): record admin panel staged plan` (до коммита F10.1)
+**Тесты:** 198 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-11 (F10.1 implemented)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10.1 — Доступ и главное меню админки
+**Status:** implemented → awaiting human verification
+
+### What was done
+
+- `src/bot/handlers/admin.py`: создан — `handle_admin_command`, `show_admin_menu`, `admin_exit`, skeleton callbacks (`admin_orders`, `admin_products`, `admin_categories`, `admin_stats`, `admin_broadcast`), `_is_admin` helper.
+- `src/bot/keyboards.py`: добавлены `admin_menu_keyboard()` (6 кнопок) и `admin_back_keyboard()`.
+- `src/bot/router.py`: подключён `/admin` в `_handle_message`, подключены `admin:*` callbacks в `_handle_callback` с повторной проверкой доступа.
+- `tests/test_admin.py`: создан — 7 тестов (доступ, меню, skeleton callbacks, exit, edge cases).
+- `tests/test_router.py`: добавлены 4 routing-теста (`/admin`, `/admin denied`, `admin:orders`, `admin:exit`).
+- `feature_list.json`: F10 переведена из `todo` в `in_progress` (разрешено человеком перед BUILD).
+
+### Evidence
+
+- pytest: 198 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success (1 pre-existing webhook.py:23 only) ✅
+- init.ps1: READY ✅
+- Live-test MAX:
+  - Кнопка «Начать» (bot_started) запускает бота ✅
+  - Slash-команды start, help, contact, admin зарегистрированы (PATCH /me 200 OK) ✅
+  - Обычный пользователь /admin → «Команда не найдена.» ✅
+  - Админ /admin → экран «🛠 Админ-панель» с инструкцией ✅
+  - 6 кнопок админ-меню работают ✅
+  - Skeleton placeholders показывают «скоро» ✅
+  - admin:back возвращает в админ-панель ✅
+  - admin:exit возвращает в главное меню ✅
+  - Ошибок 400/500/traceback по admin flow нет ✅
+- F10.2–F10.5: не начаты ✅
+- БД/миграции/seed/.env: не изменены ✅
+
+### Guardrails respected
+
+- Не реализованы F10.2–F10.5.
+- Нет admin FSM.
+- Нет CRUD-изменений.
+- Нет изменений БД, миграций, seed, `.env`.
+
+### Next best action
+
+1. `git add` и `git commit` всех изменений F10.1.
+2. `git push origin main`.
+3. Человек обновляет `feature_list.json` (F10 → completed после verification).
 
 ---
 

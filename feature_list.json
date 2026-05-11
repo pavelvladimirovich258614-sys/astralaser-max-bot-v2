@@ -166,7 +166,8 @@
     {
       "id": "F10",
       "name": "Админ-панель",
-      "status": "todo",
+      "status": "in_progress",
+      "started_at": "2026-05-11",
       "depends_on": ["F09"],
       "acceptance_criteria": [
         "/admin доступен только пользователям из MAX_ADMIN_USER_IDS",

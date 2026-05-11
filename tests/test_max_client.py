@@ -308,6 +308,48 @@ async def test_get_chat_member_404_returns_none(set_token):
 
 
 @pytest.mark.asyncio
+async def test_set_bot_commands(set_token):
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["url"] = str(request.url)
+        captured["body"] = json.loads(request.content) if request.content else {}
+        return httpx.Response(200)
+
+    client = MAXClient(http_client=_make_transport(handler))
+    result = await client.set_bot_commands(
+        [
+            {"name": "start", "description": "Главное меню"},
+            {"name": "help", "description": "Помощь"},
+        ]
+    )
+    await client.close()
+
+    assert result is True
+    assert captured["method"] == "PATCH"
+    assert "/me" in captured["url"]
+    assert captured["body"]["commands"] == [
+        {"name": "start", "description": "Главное меню"},
+        {"name": "help", "description": "Помощь"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_set_bot_commands_failure(set_token, caplog):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, text="Bad Request")
+
+    client = MAXClient(http_client=_make_transport(handler))
+    with caplog.at_level("WARNING"):
+        result = await client.set_bot_commands([{"name": "start", "description": "Главное меню"}])
+    await client.close()
+
+    assert result is False
+    assert "set_bot_commands failed" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_get_chat_member_uses_correct_endpoint(set_token):
     captured: dict[str, Any] = {}
 

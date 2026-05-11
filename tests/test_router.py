@@ -490,3 +490,71 @@ async def test_router_callback_sub_check(router):
     r, client = router
     await r.process(_make_callback_payload("sub:check"))
     assert len(client.calls) >= 1
+
+
+@pytest.mark.asyncio
+async def test_router_command_admin(router, monkeypatch):
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+    await r.process(_make_message_payload("/admin"))
+    assert any("🛠 Админ-панель" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_command_admin_denied(router, monkeypatch):
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["4147438"]})())
+    await r.process(_make_message_payload("/admin", user_id="99999"))
+    assert any("Команда не найдена" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_orders(router, monkeypatch):
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+    await r.process(_make_callback_payload("admin:orders", user_id="123"))
+    assert any("📦 Заказы" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_exit(router, monkeypatch):
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+    await r.process(_make_callback_payload("admin:exit", user_id="123"))
+    # admin:exit вызывает show_main_menu, которая в тесте делает delete_message + send_message
+    assert any("delete_message" == c["method"] for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_back(router, monkeypatch):
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+    await r.process(_make_callback_payload("admin:back", user_id="123"))
+    assert any("🛠 Админ-панель" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_bot_started(router):
+    r, client = router
+    payload = {
+        "update_type": "bot_started",
+        "chat_id": "30782784",
+        "user_id": "235277673",
+        "user": {"user_id": "235277673", "name": "Test"},
+    }
+    await r.process(payload)
+    assert any("edit_message" == c["method"] or "send_message" == c["method"] for c in client.calls)
+    # Проверяем, что handle_start получил chat_id из payload["chat_id"], а не user_id
+    assert any(c.get("chat_id") == "30782784" for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_bot_started_missing_chat_id(router):
+    r, client = router
+    payload = {
+        "update_type": "bot_started",
+        "user": {"user_id": "123", "name": "Test"},
+    }
+    await r.process(payload)
+    # Без chat_id handle_start не должен вызываться
+    assert not any("edit_message" == c["method"] or "send_message" == c["method"] for c in client.calls)

@@ -5,6 +5,7 @@ import time
 from collections import OrderedDict
 from typing import Any
 
+from src.bot.handlers import admin as admin_handler
 from src.bot.handlers import cart as cart_handler
 from src.bot.handlers import catalog as catalog_handler
 from src.bot.handlers import info as info_handler
@@ -33,6 +34,8 @@ class UpdateRouter:
                 await self._handle_message(payload)
             elif update_type == "message_callback":
                 await self._handle_callback(payload)
+            elif update_type == "bot_started":
+                await self._handle_bot_started(payload)
             else:
                 logger.debug("ignored update type: %s", update_type)
         except Exception:
@@ -72,6 +75,19 @@ class UpdateRouter:
             await info_handler.show_contact(self.client, chat_id)
         elif text.startswith("/help"):
             await info_handler.show_help(self.client, chat_id)
+        elif text.startswith("/admin"):
+            await admin_handler.handle_admin_command(self.client, chat_id, user_id, user)
+            return
+
+    async def _handle_bot_started(self, payload: dict[str, Any]) -> None:
+        """Обработка события 'Начать' в MAX (bot_started)."""
+        user = payload.get("user", {})
+        user_id = payload.get("user_id") or user.get("user_id") or user.get("id")
+        chat_id = payload.get("chat_id")
+        if not chat_id or not user_id:
+            logger.warning("bot_started missing user_id or chat_id")
+            return
+        await start_handler.handle_start(self.client, chat_id, user_id, user)
 
     async def _handle_callback(self, payload: dict[str, Any]) -> None:
         cb = payload.get("callback", {})
@@ -159,6 +175,24 @@ class UpdateRouter:
 
         if data == "clear:no":
             await cart_handler.cancel_clear_cart(self.client, chat_id, user_id, message_id)
+            return
+
+        # admin callbacks
+        if data.startswith("admin:"):
+            if data == "admin:orders":
+                await admin_handler.admin_orders(self.client, chat_id, user_id, message_id)
+            elif data == "admin:products":
+                await admin_handler.admin_products(self.client, chat_id, user_id, message_id)
+            elif data == "admin:categories":
+                await admin_handler.admin_categories(self.client, chat_id, user_id, message_id)
+            elif data == "admin:stats":
+                await admin_handler.admin_stats(self.client, chat_id, user_id, message_id)
+            elif data == "admin:broadcast":
+                await admin_handler.admin_broadcast(self.client, chat_id, user_id, message_id)
+            elif data == "admin:exit":
+                await admin_handler.admin_exit(self.client, chat_id, user_id, message_id)
+            elif data == "admin:back":
+                await admin_handler.admin_back_to_menu(self.client, chat_id, user_id, message_id)
             return
 
         # callback patterns с аргументами
