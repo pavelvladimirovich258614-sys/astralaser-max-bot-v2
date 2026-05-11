@@ -151,7 +151,9 @@
     {
       "id": "F09",
       "name": "Проверка подписки на канал",
-      "status": "todo",
+      "status": "completed",
+      "completed_at": "2026-05-11",
+      "evidence": "pytest: 179 passed, ruff: clean, mypy: clean (1 pre-existing webhook.py:23), init.ps1: READY, live-test B: passed",
       "depends_on": ["F08"],
       "acceptance_criteria": [
         "Если MAX_REQUIRED_CHANNEL пуст — gate отключён, FSM запускается сразу",
