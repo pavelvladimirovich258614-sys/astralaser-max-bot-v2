@@ -62,6 +62,44 @@
 
 ---
 
+## Session Record — 2026-05-12 (post-F10.2 hotfix checkpoint)
+
+**Agent:** Kimi K2.6 (OpenCode)  
+**Feature:** F10.2 — hotfix (test startup network calls)  
+**Status:** hotfix committed → awaiting full suite verification in next session
+
+### What was done
+
+- Removed diagnostic artifacts `pytest_out.txt` and `pytest_output.txt`.
+- `tests/test_webhook.py`: expanded `disable_max_api_calls` fixture to also monkeypatch `MAXClient.subscribe_webhook` and `MAXClient.set_bot_commands` to no-op.
+- Added type annotations to fixture and test functions in `tests/test_webhook.py` for mypy compliance.
+
+### Context
+
+- F10.2 was already committed and pushed (`5c03ada`).
+- After F10.2, `init.ps1` could hang on Windows because `TestClient(app)` triggered the lifespan, which called `MAXClient.set_bot_commands()` (PATCH /me) and `subscribe_webhook()`. On local dev without network access to MAX API, this caused `httpx.ConnectError` and unstable test runs.
+- Fix isolates webhook tests from real network calls without touching production code.
+
+### Evidence
+
+- `tests/test_webhook.py::test_health` — PASSED ✅
+- `tests/test_webhook.py::test_webhook_accepts_post` — PASSED ✅
+- No real network calls to MAX API during webhook tests ✅
+
+### Deferred
+
+- Full `pytest -v` and `init.ps1` were **not rerun** in this emergency checkpoint due to observed Windows/pytest-asyncio hangs during the diagnostic session. This must be verified before starting F10.3.
+
+### Guardrails respected
+
+- F10 remains `in_progress`.
+- F10.3–F10.5 not started.
+- No changes to F10.2 order management logic.
+- No changes to `src/main.py`, production startup, `.env`, DB, migrations, or VPS/nginx.
+- `feature_list.json` not modified.
+
+---
+
 ## Session Record — 2026-05-11 (F10.1 implemented)
 
 **Agent:** Kimi K2.6 (OpenCode)
