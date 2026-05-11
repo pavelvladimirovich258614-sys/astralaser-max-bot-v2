@@ -4,11 +4,11 @@
 
 ## Current Verified State
 
-**Статус проекта:** F09 completed after live-test B, awaiting human merge to main
+**Статус проекта:** F09 completed and merged into main, F10 staged plan recorded
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F09 — Проверка подписки на канал (completed, pending merge)
-**Последний коммит:** `fix(F09): add channel link to subscription retry`
-**Тесты:** 179 passed (на rescue-ветке)
+**Текущая фича:** F10 — Админ-панель (staged plan approved, awaiting F10.1 implementation)
+**Последний коммит:** `ff4b717 merge(F09): subscription gate`
+**Тесты:** 179 passed
 **Блокер:** нет
 
 ---
@@ -46,6 +46,64 @@
 ### Next best action
 
 Человек обновляет `feature_list.json` (F09 → completed) и делает merge `rescue/f09-subscription-gate-wip` → `main`.
+
+---
+
+## Session Record — 2026-05-11 (F10 staged plan)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10 — Админ-панель
+**Status:** staged plan approved, awaiting F10.1 implementation
+
+### Context
+
+- F09 completed and merged into main.
+- main is stable at `ff4b717 merge(F09): subscription gate`.
+- F10 status in `feature_list.json`: `todo`.
+- F10 will be implemented in staged subfeatures.
+- No code changes started yet.
+
+### Read-only findings
+
+- F10 по docs/TZ.md включает: `/admin` доступ, главное меню, заказы, товары, категории, статистика, рассылка, добавление товара через FSM, управление статусами заказов.
+- Модели уже есть: User, Category, Product, ProductPhoto, Order, OrderItem, UserState.
+- CRUD частично есть: order_crud (create, get, list, update_status), product_crud (get), category_crud (get).
+- Для F10 нужно создать: `src/bot/handlers/admin.py`, `src/services/admin_service.py`, `tests/test_admin.py`, дополнить CRUD.
+
+### Staged plan
+
+- **F10.1** — Доступ и главное меню админки (`/admin`, проверка MAX_ADMIN_USER_IDS, экран с кнопками, без подменю).
+- **F10.2** — Управление заказами (список по статусам, детали, смена статуса).
+- **F10.3** — Управление товарами (список категорий, товаров, toggle is_active, soft-delete).
+- **F10.4** — Добавление товара через FSM (категория → название → цена → описание → фото URL → превью → сохранить).
+- **F10.5** — Рассылка (текст → подтверждение → отправка с throttling, возможно follow-up).
+
+### Risks
+
+- FSM collision `order:*` vs `admin:*` в router.
+- Доступ админа должен проверяться в каждом handler, не только в `/admin`.
+- Soft-delete предпочтительнее физического удаления товаров.
+- Рассылка требует throttling из-за MAX API rate limits.
+
+### First BUILD step
+
+F10.1 only — admin access + admin main menu + route skeleton + tests.
+
+### Tests for F10.1
+
+- `test_admin_access_denied_for_regular_user`
+- `test_admin_access_granted_for_admin`
+- `test_admin_menu_has_all_buttons`
+- `test_admin_exit_returns_to_main_menu`
+- `test_admin_callback_routed_correctly`
+
+### Guardrails for F10.1
+
+- Не реализовывать F10.2–F10.5.
+- Не делать admin FSM.
+- Не менять БД/миграции.
+- Не менять `.env`.
+- Не трогать F11+.
 
 ---
 
