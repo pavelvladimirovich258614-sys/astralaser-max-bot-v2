@@ -944,3 +944,159 @@ async def test_admin_add_product_denied_for_regular_user(monkeypatch):
     await admin_handler.admin_add_cancel(client, chat_id=1, user_id="99999", message_id="msg_1")
     assert len(client.calls) == 1
     assert "Команда не найдена" in client.calls[0]["text"]
+
+
+# ---------------------------------------------------------------------------
+# Admin broadcast tests (F10.5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_start_sets_state(monkeypatch, db_session):
+    """admin:broadcast устанавливает state admin:broadcast:text."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    client = RecordingClient()
+    await admin_handler.admin_broadcast(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    user = await db_session.scalar(select(User).where(User.max_user_id == "4147438"))
+    assert user is not None
+    state, data = await fsm_service.get_state(db_session, user.id)
+    assert state == fsm_service.ADMIN_BROADCAST_TEXT
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_start_shows_prompt(monkeypatch):
+    """admin:broadcast показывает prompt для ввода текста."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    client = RecordingClient()
+    await admin_handler.admin_broadcast(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    assert "Введите текст сообщения" in client.calls[0]["text"]
+    assert any(b["payload"] == "admin:broadcast:cancel" for row in client.calls[0]["reply_markup"] for b in row)
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_text_empty_shows_error(monkeypatch, db_session):
+    """Пустой текст рассылки — ошибка, остаёмся в state."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, fsm_service.ADMIN_BROADCAST_TEXT, {})
+
+    client = RecordingClient()
+    handled = await admin_handler.handle_admin_fsm_message(
+        client, chat_id=1, user_id="4147438", message_id="msg_1", text="   "
+    )
+    assert handled is True
+    assert client.calls[0]["method"] == "send_message"
+    assert "пустым" in client.calls[0]["text"].lower()
+
+    state, data = await fsm_service.get_state(db_session, user.id)
+    assert state == fsm_service.ADMIN_BROADCAST_TEXT
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_text_too_long_shows_error(monkeypatch, db_session):
+    """Текст длиннее 4000 символов — ошибка, остаёмся в state."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, fsm_service.ADMIN_BROADCAST_TEXT, {})
+
+    client = RecordingClient()
+    handled = await admin_handler.handle_admin_fsm_message(
+        client, chat_id=1, user_id="4147438", message_id="msg_1", text="A" * 4001
+    )
+    assert handled is True
+    assert client.calls[0]["method"] == "send_message"
+    assert "4000" in client.calls[0]["text"]
+
+    state, data = await fsm_service.get_state(db_session, user.id)
+    assert state == fsm_service.ADMIN_BROADCAST_TEXT
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_text_valid_shows_preview(monkeypatch, db_session):
+    """Валидный текст — показывается preview с кнопками Отправить/Отмена."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, fsm_service.ADMIN_BROADCAST_TEXT, {})
+
+    client = RecordingClient()
+    handled = await admin_handler.handle_admin_fsm_message(
+        client, chat_id=1, user_id="4147438", message_id="msg_1", text="Привет всем!"
+    )
+    assert handled is True
+    assert "Предпросмотр рассылки" in client.calls[0]["text"]
+    assert "Привет всем!" in client.calls[0]["text"]
+    kb = client.calls[0]["reply_markup"]
+    assert any(b["payload"] == "admin:broadcast:send" for row in kb for b in row)
+    assert any(b["payload"] == "admin:broadcast:cancel" for row in kb for b in row)
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_cancel_clears_state(monkeypatch, db_session):
+    """admin:broadcast:cancel очищает state и возвращает в админ-панель."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, fsm_service.ADMIN_BROADCAST_TEXT, {"broadcast_text": "Test"})
+
+    client = RecordingClient()
+    await admin_handler.admin_broadcast_cancel(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    state, data = await fsm_service.get_state(db_session, user.id)
+    assert state is None
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_send_is_safe_placeholder_for_now(monkeypatch, db_session):
+    """admin:broadcast:send показывает безопасную заглушку и очищает state."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, fsm_service.ADMIN_BROADCAST_TEXT, {"broadcast_text": "Test"})
+
+    client = RecordingClient()
+    await admin_handler.admin_broadcast_send(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    assert "F10.5.2" in client.calls[0]["text"]
+
+    state, data = await fsm_service.get_state(db_session, user.id)
+    assert state is None
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_denied_for_regular_user(monkeypatch):
+    """Обычный пользователь не может начать рассылку."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+    client = RecordingClient()
+
+    await admin_handler.admin_broadcast(client, chat_id=1, user_id="99999", message_id="msg_1")
+    assert len(client.calls) == 1
+    assert "Команда не найдена" in client.calls[0]["text"]
+
+    client.calls.clear()
+    await admin_handler.admin_broadcast_cancel(client, chat_id=1, user_id="99999", message_id="msg_1")
+    assert len(client.calls) == 1
+    assert "Команда не найдена" in client.calls[0]["text"]
+
+    client.calls.clear()
+    await admin_handler.admin_broadcast_send(client, chat_id=1, user_id="99999", message_id="msg_1")
+    assert len(client.calls) == 1
+    assert "Команда не найдена" in client.calls[0]["text"]

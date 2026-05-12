@@ -289,3 +289,18 @@ def admin_add_preview_keyboard() -> list[list[dict[str, Any]]]:
         [{"type": "callback", "text": "✅ Сохранить", "payload": "admin:add:save"}],
         [{"type": "callback", "text": "❌ Отмена", "payload": "admin:add:cancel"}],
     ]
+
+
+def admin_broadcast_text_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура шага ввода текста рассылки: Отмена."""
+    return [
+        [{"type": "callback", "text": "❌ Отмена", "payload": "admin:broadcast:cancel"}],
+    ]
+
+
+def admin_broadcast_preview_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура превью рассылки: Отправить / Отмена."""
+    return [
+        [{"type": "callback", "text": "✅ Отправить", "payload": "admin:broadcast:send"}],
+        [{"type": "callback", "text": "❌ Отмена", "payload": "admin:broadcast:cancel"}],
+    ]

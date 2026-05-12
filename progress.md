@@ -4,12 +4,59 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10.4.1 implemented, live-test passed, committed, pushed
+**Статус проекта:** F10.5.1 implemented, BUILD passed, live-test pending
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (F10.4.1 live-test passed)
-**Последний коммит:** `feat(F10): add admin product creation FSM`
-**Тесты:** 263 passed
+**Текущая фича:** F10 — Админ-панель (F10.5.1 BUILD passed, live-test pending)
+**Последний коммит:** `feat(F10.5.1): add admin broadcast draft and preview`
+**Тесты:** 275 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-12 (F10.5.1 implemented, BUILD passed, live-test pending)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10.5.1 — Рассылка: draft и preview (admin broadcast)
+**Status:** implemented → awaiting human verification (live-test pending)
+
+### What was done
+
+- `src/services/fsm_service.py`: добавлена константа `ADMIN_BROADCAST_TEXT = "admin:broadcast:text"` с префиксом `admin:` для изоляции от `order:*` FSM.
+- `src/bot/keyboards.py`: добавлены 2 клавиатуры:
+  - `admin_broadcast_text_keyboard()` — одна кнопка ❌ Отмена (`admin:broadcast:cancel`).
+  - `admin_broadcast_preview_keyboard()` — кнопки ✅ Отправить (`admin:broadcast:send`) / ❌ Отмена (`admin:broadcast:cancel`).
+- `src/bot/handlers/admin.py`:
+  - `admin_broadcast` — заменён placeholder на реальный старт FSM: устанавливает state `admin:broadcast:text`, просит ввести текст рассылки.
+  - `_handle_admin_broadcast_text` — валидация текста (не пустой после strip, ≤4000 символов); при ошибке — повторный запрос; при успехе — превью текста с `admin_broadcast_preview_keyboard`.
+  - `admin_broadcast_cancel` — очистка state и возврат в админ-меню.
+  - `admin_broadcast_send` — safe placeholder: очищает state, показывает сообщение «Рассылка будет реализована в следующем обновлении» (фактическая массовая отправка отложена на F10.5.2).
+- `src/bot/router.py`: добавлен routing для callback `admin:broadcast:cancel` и `admin:broadcast:send` с проверкой доступа админа.
+- `tests/test_admin.py`: +8 тестов broadcast FSM (start, empty text, too long text, valid text preview, cancel from text state, cancel from preview, send placeholder, access denied).
+- `tests/test_router.py`: +4 теста routing (cancel callback, send callback, invalid payload, access denied).
+
+### Evidence
+
+- pytest: 275 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 36 source files ✅
+- init.ps1: === READY === ✅
+- Live-test MAX: **не проведён в этой сессии** ⏳
+
+### Scope guard
+
+- F10.5.2 (фактическая массовая отправка всем User) — не начата ✅
+- F10.4.1 — уже реализована, закоммичена, запушена ✅
+- «Наши работы» — не реализована ✅
+- MAX upload — не добавлен ✅
+- Физическое удаление товара — не добавлено ✅
+- БД-модели, миграции, seed, `.env`, `docs/TZ.md` — не изменены ✅
+- `feature_list.json` — не изменён (F10 остаётся `in_progress`) ✅
+
+### Next best action
+
+1. Провести live-test в MAX: admin broadcast flow (📤 Рассылка → ввод текста → preview → Отмена / Отправить).
+2. После успешного live-test — `git commit` + `git push origin main`.
+3. Приступить к F10.5.2 (фактическая отправка рассылки с throttling) по explicit approve — или закрыть F10 целиком, если F10.5.2 не нужна.
 
 ---
 

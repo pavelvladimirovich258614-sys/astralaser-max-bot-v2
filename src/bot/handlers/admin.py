@@ -397,10 +397,59 @@ async def admin_broadcast(
     user_id: int | str,
     message_id: str | None = None,
 ) -> None:
-    """📤 Рассылка — placeholder (F10.5)."""
+    """📤 Рассылка — начать FSM: запросить текст сообщения."""
     if not _is_admin(user_id):
+        await client.send_message(chat_id, NOT_FOUND_TEXT)
         return
-    text = "📤 Рассылка — скоро."
+
+    async with async_session_maker() as session:
+        user_obj = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        await fsm_service.set_state(session, user_obj.id, fsm_service.ADMIN_BROADCAST_TEXT, {})
+
+    text = "📤 Рассылка\n\nВведите текст сообщения для пользователей:"
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=kb.admin_broadcast_text_keyboard())
+    else:
+        await client.send_message(chat_id, text, reply_markup=kb.admin_broadcast_text_keyboard())
+
+
+async def admin_broadcast_cancel(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None = None,
+) -> None:
+    """Отменить рассылку и вернуться в админ-панель."""
+    if not _is_admin(user_id):
+        await client.send_message(chat_id, NOT_FOUND_TEXT)
+        return
+
+    async with async_session_maker() as session:
+        user_obj = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        await fsm_service.clear_state(session, user_obj.id)
+
+    await show_admin_menu(client, chat_id, message_id)
+
+
+async def admin_broadcast_send(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None = None,
+) -> None:
+    """Безопасная заглушка для отправки рассылки (F10.5.2)."""
+    if not _is_admin(user_id):
+        await client.send_message(chat_id, NOT_FOUND_TEXT)
+        return
+
+    async with async_session_maker() as session:
+        user_obj = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        await fsm_service.clear_state(session, user_obj.id)
+
+    text = "📤 Отправка рассылки будет реализована в F10.5.2."
     if message_id:
         await client.edit_message(chat_id, message_id, text, reply_markup=kb.admin_back_keyboard())
     else:
@@ -502,6 +551,8 @@ async def handle_admin_fsm_message(
             return await _handle_admin_add_description(client, chat_id, user_id, message_id, text, session, user_obj.id, data)
         if state == fsm_service.ADMIN_ADD_PHOTOS:
             return await _handle_admin_add_photos(client, chat_id, user_id, message_id, text, session, user_obj.id, data)
+        if state == fsm_service.ADMIN_BROADCAST_TEXT:
+            return await _handle_admin_broadcast_text(client, chat_id, user_id, message_id, text, session, user_obj.id, data)
 
     return False
 
@@ -615,6 +666,40 @@ async def _handle_admin_add_photos(
     count = len(current_urls)
     msg = f"Добавлено фото: {count}\n\nОтправьте ещё URL или нажмите ✅ Готово."
     await client.send_message(chat_id, msg, reply_markup=kb.admin_add_photos_keyboard())
+    return True
+
+
+async def _handle_admin_broadcast_text(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None,
+    text: str,
+    session: Any,
+    user_db_id: int,
+    data: dict[str, Any],
+) -> bool:
+    broadcast_text = text.strip()
+    if not broadcast_text:
+        err = "Текст рассылки не может быть пустым. Попробуйте ещё раз:"
+        await client.send_message(chat_id, err, reply_markup=kb.admin_broadcast_text_keyboard())
+        return True
+
+    if len(broadcast_text) > 4000:
+        err = "Текст рассылки слишком длинный (максимум 4000 символов). Попробуйте ещё раз:"
+        await client.send_message(chat_id, err, reply_markup=kb.admin_broadcast_text_keyboard())
+        return True
+
+    await fsm_service.set_state(session, user_db_id, fsm_service.ADMIN_BROADCAST_TEXT, {**data, "broadcast_text": broadcast_text})
+    preview = (
+        "📤 Предпросмотр рассылки\n\n"
+        f"{broadcast_text}\n\n"
+        "Отправить это сообщение всем пользователям?"
+    )
+    if message_id:
+        await client.edit_message(chat_id, message_id, preview, reply_markup=kb.admin_broadcast_preview_keyboard())
+    else:
+        await client.send_message(chat_id, preview, reply_markup=kb.admin_broadcast_preview_keyboard())
     return True
 
 

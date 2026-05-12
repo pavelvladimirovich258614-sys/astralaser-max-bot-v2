@@ -19,6 +19,8 @@ ADMIN_ADD_DESCRIPTION = "admin:add:description"
 ADMIN_ADD_PHOTOS = "admin:add:photos"
 ADMIN_ADD_PREVIEW = "admin:add:preview"
 
+ADMIN_BROADCAST_TEXT = "admin:broadcast:text"
+
 
 async def get_state(session: AsyncSession, user_id: int) -> tuple[str | None, dict[str, Any]]:
     """Получить текущий FSM-state и данные пользователя."""

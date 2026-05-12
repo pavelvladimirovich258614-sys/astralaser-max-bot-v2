@@ -244,6 +244,10 @@ class UpdateRouter:
                 await admin_handler.admin_stats(self.client, chat_id, user_id, message_id)
             elif data == "admin:broadcast":
                 await admin_handler.admin_broadcast(self.client, chat_id, user_id, message_id)
+            elif data == "admin:broadcast:cancel":
+                await admin_handler.admin_broadcast_cancel(self.client, chat_id, user_id, message_id)
+            elif data == "admin:broadcast:send":
+                await admin_handler.admin_broadcast_send(self.client, chat_id, user_id, message_id)
             elif data == "admin:exit":
                 await admin_handler.admin_exit(self.client, chat_id, user_id, message_id)
             elif data == "admin:back":

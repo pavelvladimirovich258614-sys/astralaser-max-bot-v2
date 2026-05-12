@@ -800,3 +800,85 @@ async def test_router_message_in_order_state_still_routes_to_order_handler(route
 
     await r.process(_make_message_payload("Иван Иванов", user_id="901"))
     assert any("Шаг 2/4" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_broadcast_routes_to_handler(router, monkeypatch, async_engine):
+    from src.bot.handlers import admin as admin_handler
+
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(router_module, "async_session_maker", test_session_maker)
+    monkeypatch.setattr(admin_handler, "async_session_maker", test_session_maker)
+
+    await r.process(_make_callback_payload("admin:broadcast", user_id="123"))
+    assert len(client.calls) == 1
+    assert "Введите текст сообщения" in client.calls[0].get("text", "")
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_broadcast_cancel_routes_to_handler(router, monkeypatch, async_engine):
+    from src.bot.handlers import admin as admin_handler
+
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(router_module, "async_session_maker", test_session_maker)
+    monkeypatch.setattr(admin_handler, "async_session_maker", test_session_maker)
+
+    await r.process(_make_callback_payload("admin:broadcast:cancel", user_id="123"))
+    assert len(client.calls) == 1
+    assert client.calls[0]["method"] in ("edit_message", "send_message")
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_broadcast_send_routes_to_handler(router, monkeypatch, async_engine):
+    from src.bot.handlers import admin as admin_handler
+
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(router_module, "async_session_maker", test_session_maker)
+    monkeypatch.setattr(admin_handler, "async_session_maker", test_session_maker)
+
+    await r.process(_make_callback_payload("admin:broadcast:send", user_id="123"))
+    assert len(client.calls) == 1
+    assert "F10.5.2" in client.calls[0].get("text", "")
+
+
+@pytest.mark.asyncio
+async def test_router_message_in_broadcast_state_routes_to_admin_handler(router, monkeypatch, async_engine):
+    from src.bot.handlers import admin as admin_handler
+
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["900"]})())
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        from src.db.models import User
+        user = User(max_user_id="900", full_name="Admin")
+        session.add(user)
+        await session.commit()
+        await fsm_service.set_state(session, user.id, fsm_service.ADMIN_BROADCAST_TEXT, {})
+
+    monkeypatch.setattr(router_module, "async_session_maker", test_session_maker)
+    monkeypatch.setattr(admin_handler, "async_session_maker", test_session_maker)
+
+    await r.process(_make_message_payload("Hello broadcast", user_id="900"))
+    assert any("Предпросмотр рассылки" in c.get("text", "") for c in client.calls)
