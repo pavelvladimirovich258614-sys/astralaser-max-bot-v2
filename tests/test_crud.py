@@ -8,7 +8,7 @@ from src.db.crud.category import get_active_categories, get_by_slug
 from src.db.crud.order import create_order, get_by_user
 from src.db.crud.order import get_by_id as get_order_by_id
 from src.db.crud.product import get_by_category
-from src.db.crud.user import create_user, get_user_by_max_id, update_consent
+from src.db.crud.user import create_user, get_user_by_max_id, update_consent, update_max_chat_id
 from src.db.crud.user_state import clear_state, get_state, set_state
 from src.db.models import Base, Category, Product
 
@@ -221,3 +221,39 @@ async def test_user_state_set_get_clear(db_session: AsyncSession):
     await clear_state(db_session, user.id)
     cleared = await get_state(db_session, user.id)
     assert cleared is None
+
+
+@pytest.mark.asyncio
+async def test_create_user_with_max_chat_id(db_session: AsyncSession):
+    user = await create_user(db_session, max_user_id="chat_user", max_chat_id="123456")
+    assert user.max_chat_id == "123456"
+
+    found = await get_user_by_max_id(db_session, "chat_user")
+    assert found is not None
+    assert found.max_chat_id == "123456"
+
+
+@pytest.mark.asyncio
+async def test_update_max_chat_id_sets_value(db_session: AsyncSession):
+    user = await create_user(db_session, max_user_id="upd_user")
+    assert user.max_chat_id is None
+
+    updated = await update_max_chat_id(db_session, user, "789012")
+    assert updated.max_chat_id == "789012"
+
+    found = await get_user_by_max_id(db_session, "upd_user")
+    assert found is not None
+    assert found.max_chat_id == "789012"
+
+
+@pytest.mark.asyncio
+async def test_update_max_chat_id_ignores_none(db_session: AsyncSession):
+    user = await create_user(db_session, max_user_id="none_user", max_chat_id="111")
+    assert user.max_chat_id == "111"
+
+    updated = await update_max_chat_id(db_session, user, None)
+    assert updated.max_chat_id == "111"
+
+    found = await get_user_by_max_id(db_session, "none_user")
+    assert found is not None
+    assert found.max_chat_id == "111"

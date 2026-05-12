@@ -4,12 +4,70 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10.5.2b handler connected to broadcast plan; disabled-safe live-test passed; committed and pushed
+**Статус проекта:** F10.5.2d.1 data-layer max_chat_id implemented and verified, committed and pushed. F10.5.2d.2 not started.
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (F10.5.2b done; F10.5.2c not started)
-**Последний коммит:** `feat(F10.5.2b): connect broadcast send handler safely` (pushed to origin/main)
-**Тесты:** 285 passed
+**Текущая фича:** F10 — Админ-панель (F10.5.2d.1 done; F10.5.2d.2 not started)
+**Последний коммит:** `feat(F10.5.2d.1): add user max chat id` (pushed to origin/main)
+**Тесты:** 292 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-12 (F10.5.2d.1 data-layer max_chat_id implemented + verified + committed + pushed)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10.5.2d.1 — Add User.max_chat_id data-layer support
+**Status:** implemented, verified, committed, pushed
+
+### Context
+
+F10.5.2c controlled live-test failed with critical root cause:
+- `User.max_user_id` is MAX user_id, but MAX API `POST /messages?chat_id=...` requires dialog `chat_id`.
+- `User` model did not store dialog `chat_id`.
+- Broadcast loop sent to `recipient.max_user_id` → MAX returned `404 dialog.not.found`.
+- Additional bug: `MAXClient.send_message()` swallows 4xx internally and returns `{}`; handler falsely counted success.
+
+### What was done
+
+- `src/db/models.py`: added `max_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)` to `User`.
+- `alembic/versions/98f27f674c26_add_user_max_chat_id.py`: new migration adding nullable `max_chat_id` column + index on `users`.
+- `src/db/crud/user.py`:
+  - `create_user` updated to accept `max_chat_id: str | None = None`.
+  - Added `update_max_chat_id(session, user, max_chat_id)` — updates only when value is not None and differs.
+- `src/services/user_service.py`:
+  - `get_or_create_user` updated to accept `max_chat_id: str | None = None`.
+  - If user exists and `max_chat_id` provided → backfills via `update_max_chat_id`.
+  - If user does not exist → creates with `max_chat_id`.
+  - Backward compatible: calls without `max_chat_id` work unchanged.
+- `tests/test_crud.py`: added `test_create_user_with_max_chat_id`, `test_update_max_chat_id_sets_value`, `test_update_max_chat_id_ignores_none`.
+- `tests/test_user_service.py` (new file): added `test_get_or_create_user_creates_with_max_chat_id`, `test_get_or_create_user_updates_existing_user_chat_id`, `test_get_or_create_user_leaves_chat_id_unchanged_if_same`, `test_get_or_create_user_without_chat_id_does_not_clear_existing`.
+
+### Evidence
+
+- pytest: 292 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 36 source files ✅
+- init.ps1: Architecture OK, === READY === ✅
+
+### Scope guard
+
+- `src/bot/router.py` — not changed ✅
+- `src/bot/handlers/admin.py` — not changed ✅
+- `src/services/admin_service.py` — not changed ✅
+- `src/bot/max_client.py` — not changed ✅
+- Broadcast loop / send counting — not changed ✅
+- No live-test, no uvicorn run ✅
+- `BROADCAST_ENABLED` not enabled, no real broadcast ✅
+- `feature_list.json` — not changed (F10 remains `in_progress`) ✅
+
+### Notes / follow-ups
+
+- Alembic migration file created; dev DB was upgraded with `alembic upgrade head` during verification. No production DB action performed.
+- Do not run more migrations without explicit command.
+
+### Next best action
+
+- F10.5.2d.2 — Router capture: pass dialog `chat_id` from webhook payload into `get_or_create_user` on every incoming event.
 
 ---
 
