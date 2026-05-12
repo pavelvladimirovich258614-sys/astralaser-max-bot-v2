@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from src.db.models import Base, Order, OrderItem, User
+from src.db.models import Base, Category, Order, OrderItem, Product, ProductPhoto, User
 from src.services import admin_service
 
 
@@ -234,3 +234,151 @@ def test_status_label_known():
 
 def test_status_label_unknown():
     assert admin_service.status_label("whatever") == "whatever"
+
+
+# ---------------------------------------------------------------------------
+# Product management (F10.3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_admin_categories_returns_all_categories(db_session):
+    """get_admin_categories возвращает все категории с количеством товаров."""
+    cat = Category(title="Test", slug="test", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = Product(
+        category_id=cat.id,
+        title="Product",
+        description="Desc",
+        price=100,
+        cover_url="url",
+        sort_order=1,
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    result = await admin_service.get_admin_categories(db_session)
+    assert len(result) == 1
+    assert result[0]["category"].title == "Test"
+    assert result[0]["product_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_admin_products_by_category_returns_all_products_including_inactive(db_session):
+    """get_admin_products_by_category возвращает все товары, включая неактивные."""
+    cat = Category(title="Test", slug="test", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    active = Product(
+        category_id=cat.id,
+        title="Active",
+        description="Desc",
+        price=100,
+        cover_url="url",
+        is_active=True,
+        sort_order=1,
+    )
+    inactive = Product(
+        category_id=cat.id,
+        title="Inactive",
+        description="Desc",
+        price=200,
+        cover_url="url",
+        is_active=False,
+        sort_order=2,
+    )
+    db_session.add_all([active, inactive])
+    await db_session.commit()
+
+    products = await admin_service.get_admin_products_by_category(db_session, cat.id)
+    assert len(products) == 2
+    titles = {p.title for p in products}
+    assert "Active" in titles
+    assert "Inactive" in titles
+
+
+@pytest.mark.asyncio
+async def test_get_admin_product_detail_loads_category_and_photo_count(db_session):
+    """get_admin_product_detail загружает товар, категорию и количество фото."""
+    cat = Category(title="Test", slug="test", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = Product(
+        category_id=cat.id,
+        title="Product",
+        description="Desc",
+        price=100,
+        cover_url="url",
+        sort_order=1,
+    )
+    db_session.add(product)
+    await db_session.flush()
+
+    photo = ProductPhoto(product_id=product.id, url="url1", sort_order=0)
+    db_session.add(photo)
+    await db_session.commit()
+
+    detail = await admin_service.get_admin_product_detail(db_session, product.id)
+    assert detail is not None
+    assert detail["product"].title == "Product"
+    assert detail["category"].title == "Test"
+    assert detail["photo_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_toggle_product_active_true_to_false(db_session):
+    """toggle_product_active меняет True на False."""
+    cat = Category(title="Test", slug="test", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = Product(
+        category_id=cat.id,
+        title="Product",
+        description="Desc",
+        price=100,
+        cover_url="url",
+        is_active=True,
+        sort_order=1,
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    updated = await admin_service.toggle_product_active(db_session, product.id)
+    assert updated is not None
+    assert updated.is_active is False
+
+
+@pytest.mark.asyncio
+async def test_toggle_product_active_false_to_true(db_session):
+    """toggle_product_active меняет False на True."""
+    cat = Category(title="Test", slug="test", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = Product(
+        category_id=cat.id,
+        title="Product",
+        description="Desc",
+        price=100,
+        cover_url="url",
+        is_active=False,
+        sort_order=1,
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    updated = await admin_service.toggle_product_active(db_session, product.id)
+    assert updated is not None
+    assert updated.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_toggle_product_active_returns_none_for_missing_product(db_session):
+    """toggle_product_active возвращает None для несуществующего товара."""
+    result = await admin_service.toggle_product_active(db_session, 99999)
+    assert result is None

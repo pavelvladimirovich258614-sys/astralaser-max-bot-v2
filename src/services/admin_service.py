@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from src.db.crud import category as category_crud
 from src.db.crud import order as order_crud
-from src.db.models import Order
+from src.db.crud import product as product_crud
+from src.db.models import Category, Order, Product, ProductPhoto
 
 VALID_STATUSES = {"pending", "confirmed", "completed", "cancelled"}
 
@@ -60,3 +64,57 @@ def status_label(status: str) -> str:
         "cancelled": "Отменён",
     }
     return labels.get(status, status)
+
+
+# ---------------------------------------------------------------------------
+# Product management (F10.3)
+# ---------------------------------------------------------------------------
+
+
+async def get_admin_categories(session: AsyncSession) -> list[dict[str, object]]:
+    """Все категории с количеством всех товаров (включая неактивные)."""
+    stmt = (
+        select(Category, func.count(Product.id))
+        .outerjoin(Product, Category.id == Product.category_id)
+        .group_by(Category.id)
+        .order_by(Category.sort_order)
+    )
+    result = await session.execute(stmt)
+    return [
+        {"category": cat, "product_count": count}
+        for cat, count in result.all()
+    ]
+
+
+async def get_admin_category_by_slug(session: AsyncSession, slug: str) -> Category | None:
+    """Получить категорию по slug для админа (включая неактивные)."""
+    return await category_crud.get_by_slug(session, slug)
+
+
+async def get_admin_products_by_category(session: AsyncSession, category_id: int) -> list[Product]:
+    """Все товары категории (включая неактивные)."""
+    return await product_crud.get_by_category_all(session, category_id)
+
+
+async def get_admin_product_detail(session: AsyncSession, product_id: int) -> dict[str, object] | None:
+    """Детали товара для админа: товар, категория, количество фото."""
+    result = await session.execute(
+        select(Product).where(Product.id == product_id).options(selectinload(Product.category))
+    )
+    product = result.scalar_one_or_none()
+    if product is None:
+        return None
+    photo_count_result = await session.execute(
+        select(func.count(ProductPhoto.id)).where(ProductPhoto.product_id == product_id)
+    )
+    photo_count = photo_count_result.scalar() or 0
+    return {
+        "product": product,
+        "category": product.category,
+        "photo_count": photo_count,
+    }
+
+
+async def toggle_product_active(session: AsyncSession, product_id: int) -> Product | None:
+    """Переключить is_active у товара."""
+    return await product_crud.toggle_active(session, product_id)

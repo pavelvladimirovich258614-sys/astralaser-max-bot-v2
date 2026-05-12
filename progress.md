@@ -4,12 +4,69 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10.2 implemented, live-test passed, committed, pushed
+**Статус проекта:** F10.3 implemented, live-test passed, committed, pushed
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (F10.2 live-test passed)
-**Последний коммит:** `feat(F10.2): add admin order management`
-**Тесты:** 222 passed
+**Текущая фича:** F10 — Админ-панель (F10.3 live-test passed)
+**Последний коммит:** `feat(F10.3): add admin product visibility management`
+**Тесты:** 241 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-12 (F10.3 implemented + live-test passed)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10.3 — Управление видимостью товаров в админ-панели
+**Status:** implemented → awaiting human verification
+
+### What was done
+
+- `src/services/admin_service.py`: добавлены `get_admin_categories`, `get_admin_category_by_slug`, `get_admin_products_by_category`, `get_admin_product_detail`, `toggle_product_active`.
+- `src/db/crud/product.py`: добавлены `get_by_category_all` (все товары категории, включая скрытые) и `toggle_active` (переключение `is_active` с `commit()`).
+- `src/db/crud/category.py`: добавлена `get_all_categories` (все категории, включая неактивные).
+- `src/bot/handlers/admin.py`: `admin_products` переписан с placeholder на реальный экран категорий; добавлены `show_admin_categories`, `show_admin_products_list`, `show_admin_product_detail`, `admin_product_toggle`, `_short_description`.
+- `src/bot/keyboards.py`: добавлены `admin_categories_keyboard`, `admin_products_keyboard`, `admin_product_detail_keyboard`.
+- `src/bot/router.py`: routing для `admin:cat:{slug}`, `admin:product:{id}`, `admin:product_toggle:{id}` с валидацией payload.
+- `tests/test_admin_service.py`: +6 тестов (категории, товары включая неактивные, детали товара, toggle true→false, false→true, missing product).
+- `tests/test_admin.py`: +8 тестов (категории, список товаров, пустая категория, детали товара, toggle, not found, доступ обычного пользователя, навигация назад).
+- `tests/test_router.py`: +5 тестов (products, cat slug, product id, toggle, invalid payload).
+
+### Evidence
+
+- pytest: 241 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 36 source files ✅
+- init.ps1: === READY === ✅
+- Live-test MAX:
+  - admin:products показывает категории с количеством товаров ✅
+  - admin:cat:{slug} показывает товары категории, включая активные/скрытые (👁/🚫) ✅
+  - admin:product:{id} открывает карточку товара ✅
+  - Карточка показывает ID, название, категорию, цену, статус, количество фото, краткое описание ✅
+  - admin:product_toggle:{id} скрывает активный товар → статус «Скрыт» ✅
+  - Скрытый товар исчезает из клиентского каталога ✅
+  - admin:product_toggle:{id} включает товар обратно → статус «Активен» ✅
+  - Товар снова появляется в клиентском каталоге ✅
+  - Навигация назад: карточка → список товаров → категории → админ-панель ✅
+  - 400/500/traceback — нет ✅
+- F10.4–F10.5: не начаты ✅
+- БД/миграции/seed/.env: не изменены ✅
+
+### Future backlog
+
+- Клиент запросил рубрику «Наши работы» — портфолио с большим каталогом фото готовых гравировок. Не реализовано в F10.3, не смешивать с товарами. Рассмотреть как отдельную будущую фичу (например, F13) после завершения F10.
+
+### Guardrails respected
+
+- Не реализованы F10.4–F10.5.
+- Нет admin FSM (добавление/редактирование товара).
+- Нет портфолио «Наши работы».
+- Нет изменений БД, миграций, seed, `.env`.
+- `feature_list.json` не изменён (F10 остаётся `in_progress`).
+
+### Next best action
+
+1. Человек обновляет `feature_list.json` (F10.3 evidence) после verification.
+2. Приступить к F10.4 (добавление товара через FSM) по explicit approve — или закрыть F10 целиком, если F10.4–F10.5 не нужны.
 
 ---
 

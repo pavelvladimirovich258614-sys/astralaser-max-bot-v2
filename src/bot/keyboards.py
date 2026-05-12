@@ -220,3 +220,38 @@ def admin_orders_back_keyboard() -> list[list[dict[str, Any]]]:
     return [
         [{"type": "callback", "text": "🔙 Назад", "payload": "admin:orders"}],
     ]
+
+
+def admin_categories_keyboard(categories: list[Any]) -> list[list[dict[str, Any]]]:
+    """Клавиатура списка категорий для админа."""
+    buttons: list[list[dict[str, Any]]] = []
+    for item in categories:
+        cat = item["category"]
+        count = item["product_count"]
+        text = f"{cat.title} — {count}"
+        buttons.append([{"type": "callback", "text": text, "payload": f"admin:cat:{cat.slug}"}])
+    buttons.append([{"type": "callback", "text": "🔙 Назад", "payload": "admin:back"}])
+    return buttons
+
+
+def admin_products_keyboard(products: list[Any], category_slug: str) -> list[list[dict[str, Any]]]:
+    """Клавиатура списка товаров категории для админа."""
+    buttons: list[list[dict[str, Any]]] = []
+    for product in products:
+        status_icon = "👁" if product.is_active else "🚫"
+        text = f"{status_icon} {product.title} — {product.price} ₽"
+        buttons.append([{"type": "callback", "text": text, "payload": f"admin:product:{product.id}"}])
+    buttons.append([{"type": "callback", "text": "🔙 Назад", "payload": "admin:products"}])
+    return buttons
+
+
+def admin_product_detail_keyboard(product_id: int, is_active: bool, category_slug: str) -> list[list[dict[str, Any]]]:
+    """Клавиатура карточки товара для админа: toggle + назад."""
+    if is_active:
+        toggle_text = "🚫 Скрыть"
+    else:
+        toggle_text = "👁 Включить"
+    return [
+        [{"type": "callback", "text": toggle_text, "payload": f"admin:product_toggle:{product_id}"}],
+        [{"type": "callback", "text": "🔙 Назад", "payload": f"admin:cat:{category_slug}"}],
+    ]

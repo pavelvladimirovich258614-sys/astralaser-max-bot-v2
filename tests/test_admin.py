@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 from src.bot.handlers import admin as admin_handler
 from src.bot.handlers import start as start_handler
 from src.bot.keyboards import admin_menu_keyboard
-from src.db.models import Base, Order, OrderItem, User
+from src.db.models import Base, Category, Order, OrderItem, Product, ProductPhoto, User
 
 
 class RecordingClient:
@@ -137,8 +137,9 @@ async def test_admin_skeleton_callbacks_show_placeholders(monkeypatch):
     monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
     client = RecordingClient()
 
+    # admin_products теперь реальный (F10.3), в пустой БД покажет placeholder
     await admin_handler.admin_products(client, chat_id=1, user_id="4147438", message_id="msg_1")
-    assert any("📚 Товары" in c["text"] for c in client.calls)
+    assert any("📚 Категории товаров пока не созданы" in c["text"] for c in client.calls)
 
     await admin_handler.admin_categories(client, chat_id=1, user_id="4147438", message_id="msg_1")
     assert any("🏷 Категории" in c["text"] for c in client.calls)
@@ -460,3 +461,206 @@ async def test_admin_back_keyboard_payload():
     payloads = [b["payload"] for row in kb for b in row]
     assert "admin:back" in payloads
     assert "admin:exit" not in payloads
+
+
+# ---------------------------------------------------------------------------
+# Product management tests (F10.3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_products_shows_categories(monkeypatch, db_session):
+    """admin:products показывает категории с количеством товаров."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    cat = Category(title="Колье", slug="kole-i-kulony", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = Product(
+        category_id=cat.id,
+        title="Кулон",
+        description="Desc",
+        price=840,
+        cover_url="url",
+        sort_order=1,
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.admin_products(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert "📚 Управление товарами" in call["text"]
+    assert any("admin:cat:kole-i-kulony" in b["payload"] for row in call["reply_markup"] for b in row)
+
+
+@pytest.mark.asyncio
+async def test_admin_products_category_shows_products(monkeypatch, db_session):
+    """admin:cat показывает все товары категории, включая неактивные."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    cat = Category(title="Колье", slug="kole-i-kulony", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    active = Product(category_id=cat.id, title="Active", description="Desc", price=100, cover_url="url", is_active=True, sort_order=1)
+    inactive = Product(category_id=cat.id, title="Inactive", description="Desc", price=200, cover_url="url", is_active=False, sort_order=2)
+    db_session.add_all([active, inactive])
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.show_admin_products_list(client, chat_id=1, user_id="4147438", slug="kole-i-kulony", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert "📚 Колье" in call["text"]
+    assert any(f"admin:product:{active.id}" in b["payload"] for row in call["reply_markup"] for b in row)
+    assert any(f"admin:product:{inactive.id}" in b["payload"] for row in call["reply_markup"] for b in row)
+
+
+@pytest.mark.asyncio
+async def test_admin_products_category_empty(monkeypatch, db_session):
+    """admin:cat для пустой категории показывает placeholder."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    cat = Category(title="Пустая", slug="empty", sort_order=1)
+    db_session.add(cat)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.show_admin_products_list(client, chat_id=1, user_id="4147438", slug="empty", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    assert "В этой категории пока нет товаров" in client.calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_admin_product_detail_shows_id_title_price_status_photo_count(monkeypatch, db_session):
+    """Карточка товара для админа содержит id, title, price, status, photo_count."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    cat = Category(title="Колье", slug="kole-i-kulony", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = Product(
+        category_id=cat.id,
+        title="Кулон",
+        description="Описание товара",
+        price=840,
+        cover_url="url",
+        is_active=True,
+        sort_order=1,
+    )
+    db_session.add(product)
+    await db_session.flush()
+
+    photo = ProductPhoto(product_id=product.id, url="url1", sort_order=0)
+    db_session.add(photo)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.show_admin_product_detail(client, chat_id=1, user_id="4147438", product_id=product.id, message_id="msg_1")
+
+    assert len(client.calls) == 1
+    text = client.calls[0]["text"]
+    assert f"Товар #{product.id}" in text
+    assert "Кулон" in text
+    assert "840 ₽" in text
+    assert "Активен" in text
+    assert "Фото: 1" in text
+    assert "Описание товара" in text
+
+    kb = client.calls[0]["reply_markup"]
+    assert any(b["payload"] == f"admin:product_toggle:{product.id}" for row in kb for b in row)
+    assert any(b["payload"] == "admin:cat:kole-i-kulony" for row in kb for b in row)
+
+
+@pytest.mark.asyncio
+async def test_admin_product_toggle_changes_status_and_rerenders(monkeypatch, db_session):
+    """Переключение is_active меняет статус и перерисовывает карточку."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    cat = Category(title="Колье", slug="kole-i-kulony", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = Product(
+        category_id=cat.id,
+        title="Кулон",
+        description="Desc",
+        price=840,
+        cover_url="url",
+        is_active=True,
+        sort_order=1,
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.admin_product_toggle(client, chat_id=1, user_id="4147438", product_id=product.id, message_id="msg_1")
+
+    assert len(client.calls) == 1
+    text = client.calls[0]["text"]
+    assert f"Товар #{product.id}" in text
+    assert "Скрыт" in text
+    assert "👁 Включить" in str(client.calls[0]["reply_markup"])
+
+
+@pytest.mark.asyncio
+async def test_admin_product_not_found(monkeypatch, db_session):
+    """При несуществующем product_id показывается 'Товар не найден.'"""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+    client = RecordingClient()
+    await admin_handler.show_admin_product_detail(client, chat_id=1, user_id="4147438", product_id=99999, message_id="msg_1")
+
+    assert len(client.calls) == 1
+    assert "Товар не найден" in client.calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_admin_product_callbacks_denied_for_regular_user(monkeypatch, db_session):
+    """Обычный пользователь не может открыть админские товары."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+    client = RecordingClient()
+
+    await admin_handler.show_admin_products_list(client, chat_id=1, user_id="99999", slug="test", message_id="msg_1")
+    assert len(client.calls) == 0
+
+    await admin_handler.show_admin_product_detail(client, chat_id=1, user_id="99999", product_id=1, message_id="msg_1")
+    assert len(client.calls) == 0
+
+    await admin_handler.admin_product_toggle(client, chat_id=1, user_id="99999", product_id=1, message_id="msg_1")
+    assert len(client.calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_admin_product_back_navigation(monkeypatch, db_session):
+    """Кнопки назад из карточки товара ведут в список товаров категории."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    cat = Category(title="Колье", slug="kole-i-kulony", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = Product(
+        category_id=cat.id,
+        title="Кулон",
+        description="Desc",
+        price=840,
+        cover_url="url",
+        is_active=True,
+        sort_order=1,
+    )
+    db_session.add(product)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.show_admin_product_detail(client, chat_id=1, user_id="4147438", product_id=product.id, message_id="msg_1")
+
+    kb = client.calls[0]["reply_markup"]
+    payloads = [b["payload"] for row in kb for b in row]
+    assert "admin:cat:kole-i-kulony" in payloads

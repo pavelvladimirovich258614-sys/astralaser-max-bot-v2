@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from typing import cast
+
 from src.bot import keyboards as kb
 from src.bot.handlers import start as start_handler
 from src.bot.max_client import MAXClient
 from src.config import get_settings
 from src.db.engine import async_session_maker
+from src.db.models import Category, Product
 from src.services import admin_service
 
 ADMIN_MENU_TEXT = """🛠 Админ-панель
@@ -208,14 +211,152 @@ async def admin_products(
     user_id: int | str,
     message_id: str | None = None,
 ) -> None:
-    """📚 Товары — placeholder (F10.3)."""
+    """📚 Товары — показать список категорий (F10.3)."""
     if not _is_admin(user_id):
         return
-    text = "📚 Товары — скоро."
-    if message_id:
-        await client.edit_message(chat_id, message_id, text, reply_markup=kb.admin_back_keyboard())
+    await show_admin_categories(client, chat_id, message_id)
+
+
+async def show_admin_categories(
+    client: MAXClient,
+    chat_id: int | str,
+    message_id: str | None = None,
+) -> None:
+    """Показать все категории для админа."""
+    async with async_session_maker() as session:
+        categories = await admin_service.get_admin_categories(session)
+
+    if not categories:
+        text = "📚 Категории товаров пока не созданы."
+        keyboard = kb.admin_back_keyboard()
     else:
-        await client.send_message(chat_id, text, reply_markup=kb.admin_back_keyboard())
+        text = "📚 Управление товарами\n\nВыберите категорию:"
+        keyboard = kb.admin_categories_keyboard(categories)
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)
+
+
+async def show_admin_products_list(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    slug: str,
+    message_id: str | None = None,
+) -> None:
+    """Показать все товары категории (включая скрытые)."""
+    if not _is_admin(user_id):
+        return
+
+    async with async_session_maker() as session:
+        category = await admin_service.get_admin_category_by_slug(session, slug)
+        if category is None:
+            text = "Категория не найдена."
+            keyboard = kb.admin_back_keyboard()
+            if message_id:
+                await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+            else:
+                await client.send_message(chat_id, text, reply_markup=keyboard)
+            return
+
+        products = await admin_service.get_admin_products_by_category(session, category.id)
+
+    if not products:
+        text = f"📚 {category.title}\n\nВ этой категории пока нет товаров."
+        keyboard = kb.admin_products_keyboard([], category.slug)
+    else:
+        text = f"📚 {category.title}\n\nВыберите товар:"
+        keyboard = kb.admin_products_keyboard(products, category.slug)
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)
+
+
+async def show_admin_product_detail(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    product_id: int,
+    message_id: str | None = None,
+) -> None:
+    """Показать карточку товара для админа."""
+    if not _is_admin(user_id):
+        return
+
+    async with async_session_maker() as session:
+        detail = await admin_service.get_admin_product_detail(session, product_id)
+
+    if detail is None:
+        text = "Товар не найден."
+        keyboard = kb.admin_back_keyboard()
+        if message_id:
+            await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+        else:
+            await client.send_message(chat_id, text, reply_markup=keyboard)
+        return
+
+    product = cast(Product, detail["product"])
+    category = cast(Category | None, detail["category"])
+    photo_count = cast(int, detail["photo_count"])
+    status_text = "Активен" if product.is_active else "Скрыт"
+    description = _short_description(product.description, max_length=300)
+
+    lines = [
+        f"📦 Товар #{product.id}",
+        "",
+        f"Название: {product.title}",
+        f"Категория: {category.title if category else '—'}",
+        f"Цена: {product.price} ₽",
+        f"Статус: {status_text}",
+        f"Фото: {photo_count}",
+        "",
+        f"Описание:\n{description}",
+    ]
+    text = "\n".join(lines)
+    category_slug = category.slug if category else ""
+    keyboard = kb.admin_product_detail_keyboard(product.id, product.is_active, category_slug)
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)
+
+
+async def admin_product_toggle(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    product_id: int,
+    message_id: str | None = None,
+) -> None:
+    """Переключить is_active товара и перерисовать карточку."""
+    if not _is_admin(user_id):
+        return
+
+    async with async_session_maker() as session:
+        product = await admin_service.toggle_product_active(session, product_id)
+
+    if product is None:
+        text = "Товар не найден."
+        keyboard = kb.admin_back_keyboard()
+        if message_id:
+            await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+        else:
+            await client.send_message(chat_id, text, reply_markup=keyboard)
+        return
+
+    await show_admin_product_detail(client, chat_id, user_id, product.id, message_id)
+
+
+def _short_description(text: str, max_length: int = 300) -> str:
+    """Обрезать описание до max_length символов."""
+    if len(text) <= max_length:
+        return text
+    return text[: max_length - 1].rstrip() + "…"
 
 
 async def admin_categories(

@@ -204,6 +204,33 @@ class UpdateRouter:
                     )
             elif data == "admin:products":
                 await admin_handler.admin_products(self.client, chat_id, user_id, message_id)
+            elif data.startswith("admin:cat:"):
+                parts = data.split(":")
+                if len(parts) == 3:
+                    slug = parts[2]
+                    await admin_handler.show_admin_products_list(
+                        self.client, chat_id, user_id, slug, message_id
+                    )
+            elif data.startswith("admin:product_toggle:"):
+                parts = data.split(":")
+                if len(parts) == 3:
+                    try:
+                        product_id = int(parts[2])
+                    except ValueError:
+                        return
+                    await admin_handler.admin_product_toggle(
+                        self.client, chat_id, user_id, product_id, message_id
+                    )
+            elif data.startswith("admin:product:"):
+                parts = data.split(":")
+                if len(parts) == 3:
+                    try:
+                        product_id = int(parts[2])
+                    except ValueError:
+                        return
+                    await admin_handler.show_admin_product_detail(
+                        self.client, chat_id, user_id, product_id, message_id
+                    )
             elif data == "admin:categories":
                 await admin_handler.admin_categories(self.client, chat_id, user_id, message_id)
             elif data == "admin:stats":
