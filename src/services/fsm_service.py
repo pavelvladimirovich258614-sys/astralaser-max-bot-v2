@@ -13,6 +13,12 @@ ORDER_WAITING_ADDRESS = "order:waiting_address"
 ORDER_WAITING_NOTES = "order:waiting_notes"
 ORDER_READY_CONFIRM = "order:ready_confirm"
 
+ADMIN_ADD_TITLE = "admin:add:title"
+ADMIN_ADD_PRICE = "admin:add:price"
+ADMIN_ADD_DESCRIPTION = "admin:add:description"
+ADMIN_ADD_PHOTOS = "admin:add:photos"
+ADMIN_ADD_PREVIEW = "admin:add:preview"
+
 
 async def get_state(session: AsyncSession, user_id: int) -> tuple[str | None, dict[str, Any]]:
     """Получить текущий FSM-state и данные пользователя."""
@@ -45,6 +51,11 @@ async def set_waiting_name(session: AsyncSession, user_id: int) -> None:
 def is_order_state(state: str | None) -> bool:
     """Проверить, что state относится к оформлению заказа."""
     return bool(state and state.startswith("order:"))
+
+
+def is_admin_state(state: str | None) -> bool:
+    """Проверить, что state относится к админ-панели."""
+    return bool(state and state.startswith("admin:"))
 
 
 async def update_data(session: AsyncSession, user_id: int, updates: dict[str, Any], next_state: str) -> None:

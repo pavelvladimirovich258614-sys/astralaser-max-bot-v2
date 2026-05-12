@@ -634,3 +634,169 @@ async def test_router_bot_started_missing_chat_id(router):
     await r.process(payload)
     # Без chat_id handle_start не должен вызываться
     assert not any("edit_message" == c["method"] or "send_message" == c["method"] for c in client.calls)
+
+
+# ---------------------------------------------------------------------------
+# Admin add product routing tests (F10.4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_add_start(router, monkeypatch):
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+    await r.process(_make_callback_payload("admin:add:start", user_id="123"))
+    assert any("Добавление товара" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_add_category(router, monkeypatch, async_engine):
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        from src.db.models import Category
+        cat = Category(title="Test", slug="test", sort_order=1)
+        session.add(cat)
+        await session.commit()
+
+    monkeypatch.setattr(router_module, "async_session_maker", test_session_maker)
+    await r.process(_make_callback_payload(f"admin:add:cat:{cat.id}", user_id="123"))
+    assert any("Введите название товара" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_add_photos_done(router, monkeypatch, async_engine):
+    from src.bot.handlers import admin as admin_handler
+
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        from src.db.models import User
+        user = User(max_user_id="123", full_name="Admin")
+        session.add(user)
+        await session.commit()
+        await fsm_service.set_state(
+            session,
+            user.id,
+            fsm_service.ADMIN_ADD_PHOTOS,
+            {"category_id": 1, "title": "Test", "price": 100, "description": "Desc", "photo_urls": []},
+        )
+
+    monkeypatch.setattr(router_module, "async_session_maker", test_session_maker)
+    monkeypatch.setattr(admin_handler, "async_session_maker", test_session_maker)
+    await r.process(_make_callback_payload("admin:add:photos_done", user_id="123"))
+    assert any("минимум одно фото" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_add_save(router, monkeypatch, async_engine):
+    from src.bot.handlers import admin as admin_handler
+
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        from src.db.models import Category, User
+        cat = Category(title="Test", slug="test", sort_order=1)
+        session.add(cat)
+        await session.flush()
+        user = User(max_user_id="123", full_name="Admin")
+        session.add(user)
+        await session.flush()
+        await fsm_service.set_state(
+            session,
+            user.id,
+            fsm_service.ADMIN_ADD_PREVIEW,
+            {
+                "category_id": cat.id,
+                "category_title": "Test",
+                "title": "Product",
+                "price": 100,
+                "description": "Desc",
+                "photo_urls": ["https://example.com/1.jpg"],
+            },
+        )
+        await session.commit()
+
+    monkeypatch.setattr(router_module, "async_session_maker", test_session_maker)
+    monkeypatch.setattr(admin_handler, "async_session_maker", test_session_maker)
+    await r.process(_make_callback_payload("admin:add:save", user_id="123"))
+    assert any("Product" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_admin_add_cancel(router, monkeypatch, async_engine):
+    from src.bot.handlers import admin as admin_handler
+
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(router_module, "async_session_maker", test_session_maker)
+    monkeypatch.setattr(admin_handler, "async_session_maker", test_session_maker)
+
+    await r.process(_make_callback_payload("admin:add:cancel", user_id="123"))
+    assert len(client.calls) == 1
+    assert client.calls[0]["method"] in ("edit_message", "send_message")
+
+
+@pytest.mark.asyncio
+async def test_router_message_in_admin_state_routes_to_admin_handler(router, monkeypatch, async_engine):
+    from src.bot.handlers import admin as admin_handler
+
+    r, client = router
+    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["900"]})())
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        from src.db.models import User
+        user = User(max_user_id="900", full_name="Admin")
+        session.add(user)
+        await session.commit()
+        await fsm_service.set_state(session, user.id, fsm_service.ADMIN_ADD_TITLE, {"category_id": 1})
+
+    monkeypatch.setattr(router_module, "async_session_maker", test_session_maker)
+    monkeypatch.setattr(admin_handler, "async_session_maker", test_session_maker)
+
+    await r.process(_make_message_payload("My Product Title", user_id="900"))
+    assert any("Введите цену" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_message_in_order_state_still_routes_to_order_handler(router, monkeypatch, async_engine):
+    r, client = router
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        from src.db.models import User
+        user = User(max_user_id="901", full_name="Test")
+        session.add(user)
+        await session.commit()
+        await fsm_service.set_waiting_name(session, user.id)
+
+    monkeypatch.setattr(router_module, "async_session_maker", test_session_maker)
+
+    await r.process(_make_message_payload("Иван Иванов", user_id="901"))
+    assert any("Шаг 2/4" in c.get("text", "") for c in client.calls)

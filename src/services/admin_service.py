@@ -91,6 +91,15 @@ async def get_admin_category_by_slug(session: AsyncSession, slug: str) -> Catego
     return await category_crud.get_by_slug(session, slug)
 
 
+async def get_admin_category_by_id(session: AsyncSession, category_id: int) -> Category | None:
+    """Получить категорию по id для админа (включая неактивные)."""
+    categories = await category_crud.get_all_categories(session)
+    for cat in categories:
+        if cat.id == category_id:
+            return cat
+    return None
+
+
 async def get_admin_products_by_category(session: AsyncSession, category_id: int) -> list[Product]:
     """Все товары категории (включая неактивные)."""
     return await product_crud.get_by_category_all(session, category_id)
@@ -118,3 +127,44 @@ async def get_admin_product_detail(session: AsyncSession, product_id: int) -> di
 async def toggle_product_active(session: AsyncSession, product_id: int) -> Product | None:
     """Переключить is_active у товара."""
     return await product_crud.toggle_active(session, product_id)
+
+
+# ---------------------------------------------------------------------------
+# Product creation (F10.4)
+# ---------------------------------------------------------------------------
+
+
+async def get_next_product_sort_order(session: AsyncSession, category_id: int) -> int:
+    """Следующий sort_order для нового товара в категории."""
+    max_order = await product_crud.get_max_sort_order(session, category_id)
+    return max_order + 1
+
+
+async def create_product_with_photos(
+    session: AsyncSession,
+    category_id: int,
+    title: str,
+    description: str,
+    price: int,
+    photo_urls: list[str],
+) -> Product | None:
+    """Создать товар и фото. cover_url = photo_urls[0]. Возвращает Product или None если нет фото."""
+    if not photo_urls:
+        return None
+
+    from src.db.crud import product_photo as product_photo_crud
+
+    sort_order = await get_next_product_sort_order(session, category_id)
+    product = await product_crud.create_product(
+        session=session,
+        category_id=category_id,
+        title=title,
+        description=description,
+        price=price,
+        cover_url=photo_urls[0],
+        sort_order=sort_order,
+        is_active=True,
+    )
+    await product_photo_crud.create_photos(session, product.id, photo_urls)
+    await session.commit()
+    return product

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 from src.bot import keyboards as kb
 from src.bot.handlers import start as start_handler
@@ -8,7 +8,7 @@ from src.bot.max_client import MAXClient
 from src.config import get_settings
 from src.db.engine import async_session_maker
 from src.db.models import Category, Product
-from src.services import admin_service
+from src.services import admin_service, fsm_service, user_service
 
 ADMIN_MENU_TEXT = """🛠 Админ-панель
 
@@ -231,7 +231,7 @@ async def show_admin_categories(
         keyboard = kb.admin_back_keyboard()
     else:
         text = "📚 Управление товарами\n\nВыберите категорию:"
-        keyboard = kb.admin_categories_keyboard(categories)
+        keyboard = kb.admin_add_start_keyboard() + kb.admin_categories_keyboard(categories)
 
     if message_id:
         await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
@@ -405,6 +405,347 @@ async def admin_broadcast(
         await client.edit_message(chat_id, message_id, text, reply_markup=kb.admin_back_keyboard())
     else:
         await client.send_message(chat_id, text, reply_markup=kb.admin_back_keyboard())
+
+
+# ---------------------------------------------------------------------------
+# Admin add product FSM (F10.4)
+# ---------------------------------------------------------------------------
+
+
+async def admin_add_start(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None = None,
+) -> None:
+    """Начать добавление товара: показать выбор категории."""
+    if not _is_admin(user_id):
+        await client.send_message(chat_id, NOT_FOUND_TEXT)
+        return
+
+    async with async_session_maker() as session:
+        categories = await admin_service.get_admin_categories(session)
+
+    if not categories:
+        text = "📚 Категории товаров пока не созданы."
+        keyboard = kb.admin_back_keyboard()
+    else:
+        text = "➕ Добавление товара\n\nВыберите категорию:"
+        keyboard = kb.admin_add_categories_keyboard(categories)
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)
+
+
+async def admin_add_category_selected(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    category_id: int,
+    message_id: str | None = None,
+) -> None:
+    """Категория выбрана — сохранить и перейти к вводу названия."""
+    if not _is_admin(user_id):
+        await client.send_message(chat_id, NOT_FOUND_TEXT)
+        return
+
+    async with async_session_maker() as session:
+        cat = await admin_service.get_admin_category_by_id(session, category_id)
+        if cat is None:
+            text = "Категория не найдена."
+            if message_id:
+                await client.edit_message(chat_id, message_id, text, reply_markup=kb.admin_back_keyboard())
+            else:
+                await client.send_message(chat_id, text, reply_markup=kb.admin_back_keyboard())
+            return
+
+        user_obj = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        await fsm_service.set_state(
+            session,
+            user_obj.id,
+            fsm_service.ADMIN_ADD_TITLE,
+            {"category_id": category_id, "category_title": cat.title},
+        )
+
+    text = "Введите название товара (2–256 символов):"
+    if message_id:
+        await client.edit_message(chat_id, message_id, text)
+    else:
+        await client.send_message(chat_id, text)
+
+
+async def handle_admin_fsm_message(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None,
+    text: str,
+) -> bool:
+    """Обработать текстовое сообщение в admin FSM. Возвращает True если обработано."""
+    if not _is_admin(user_id):
+        await client.send_message(chat_id, NOT_FOUND_TEXT)
+        return True
+
+    async with async_session_maker() as session:
+        user_obj = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        state, data = await fsm_service.get_state(session, user_obj.id)
+
+        if state == fsm_service.ADMIN_ADD_TITLE:
+            return await _handle_admin_add_title(client, chat_id, user_id, message_id, text, session, user_obj.id, data)
+        if state == fsm_service.ADMIN_ADD_PRICE:
+            return await _handle_admin_add_price(client, chat_id, user_id, message_id, text, session, user_obj.id, data)
+        if state == fsm_service.ADMIN_ADD_DESCRIPTION:
+            return await _handle_admin_add_description(client, chat_id, user_id, message_id, text, session, user_obj.id, data)
+        if state == fsm_service.ADMIN_ADD_PHOTOS:
+            return await _handle_admin_add_photos(client, chat_id, user_id, message_id, text, session, user_obj.id, data)
+
+    return False
+
+
+async def _handle_admin_add_title(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None,
+    text: str,
+    session: Any,
+    user_db_id: int,
+    data: dict[str, Any],
+) -> bool:
+    title = text.strip()
+    if len(title) < 2 or len(title) > 256:
+        err = "Название должно быть от 2 до 256 символов. Попробуйте ещё раз:"
+        await client.send_message(chat_id, err)
+        return True
+
+    await fsm_service.update_data(session, user_db_id, {"title": title}, fsm_service.ADMIN_ADD_PRICE)
+    prompt = "Введите цену товара целым числом в рублях (1–1 000 000):"
+    await client.send_message(chat_id, prompt)
+    return True
+
+
+async def _handle_admin_add_price(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None,
+    text: str,
+    session: Any,
+    user_db_id: int,
+    data: dict[str, Any],
+) -> bool:
+    try:
+        price = int(text.strip())
+    except ValueError:
+        err = "Цена должна быть целым числом. Попробуйте ещё раз:"
+        await client.send_message(chat_id, err)
+        return True
+
+    if price <= 0 or price > 1_000_000:
+        err = "Цена должна быть от 1 до 1 000 000 ₽. Попробуйте ещё раз:"
+        await client.send_message(chat_id, err)
+        return True
+
+    await fsm_service.update_data(session, user_db_id, {"price": price}, fsm_service.ADMIN_ADD_DESCRIPTION)
+    prompt = "Введите описание товара (до 1000 символов):"
+    await client.send_message(chat_id, prompt)
+    return True
+
+
+async def _handle_admin_add_description(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None,
+    text: str,
+    session: Any,
+    user_db_id: int,
+    data: dict[str, Any],
+) -> bool:
+    description = text.strip()
+    if not description:
+        err = "Описание не может быть пустым. Попробуйте ещё раз:"
+        await client.send_message(chat_id, err)
+        return True
+
+    if len(description) > 1000:
+        err = "Описание слишком длинное (максимум 1000 символов). Попробуйте ещё раз:"
+        await client.send_message(chat_id, err)
+        return True
+
+    await fsm_service.update_data(
+        session, user_db_id, {"description": description, "photo_urls": []}, fsm_service.ADMIN_ADD_PHOTOS
+    )
+    prompt = (
+        "Отправьте URL фото товара.\n\n"
+        "Можно отправить один или несколько URL (каждый с новой строки).\n"
+        "Минимум одно фото обязательно.\n"
+        "После добавления фото нажмите ✅ Готово."
+    )
+    await client.send_message(chat_id, prompt, reply_markup=kb.admin_add_photos_keyboard())
+    return True
+
+
+async def _handle_admin_add_photos(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None,
+    text: str,
+    session: Any,
+    user_db_id: int,
+    data: dict[str, Any],
+) -> bool:
+    lines = [line.strip() for line in text.splitlines()]
+    valid_urls = [line for line in lines if line.startswith(("http://", "https://"))]
+
+    if not valid_urls:
+        err = "Не найдено валидных URL. Отправьте ссылки, начинающиеся с http:// или https://"
+        await client.send_message(chat_id, err, reply_markup=kb.admin_add_photos_keyboard())
+        return True
+
+    current_urls: list[str] = data.get("photo_urls", [])
+    current_urls.extend(valid_urls)
+    await fsm_service.set_state(session, user_db_id, fsm_service.ADMIN_ADD_PHOTOS, {**data, "photo_urls": current_urls})
+
+    count = len(current_urls)
+    msg = f"Добавлено фото: {count}\n\nОтправьте ещё URL или нажмите ✅ Готово."
+    await client.send_message(chat_id, msg, reply_markup=kb.admin_add_photos_keyboard())
+    return True
+
+
+async def admin_add_photos_done(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None = None,
+) -> None:
+    """Завершить сбор фото и показать превью."""
+    if not _is_admin(user_id):
+        await client.send_message(chat_id, NOT_FOUND_TEXT)
+        return
+
+    async with async_session_maker() as session:
+        user_obj = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        state, data = await fsm_service.get_state(session, user_obj.id)
+
+        if state != fsm_service.ADMIN_ADD_PHOTOS:
+            return
+
+        photo_urls: list[str] = data.get("photo_urls", [])
+        if not photo_urls:
+            err = "Нужно добавить минимум одно фото. Отправьте URL или нажмите ❌ Отмена."
+            if message_id:
+                await client.edit_message(chat_id, message_id, err, reply_markup=kb.admin_add_photos_keyboard())
+            else:
+                await client.send_message(chat_id, err, reply_markup=kb.admin_add_photos_keyboard())
+            return
+
+        await fsm_service.set_state(session, user_obj.id, fsm_service.ADMIN_ADD_PREVIEW, data)
+        await _show_admin_add_preview(client, chat_id, message_id, data)
+
+
+async def _show_admin_add_preview(
+    client: MAXClient,
+    chat_id: int | str,
+    message_id: str | None,
+    data: dict[str, Any],
+) -> None:
+    text = _build_preview_text(data)
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=kb.admin_add_preview_keyboard())
+    else:
+        await client.send_message(chat_id, text, reply_markup=kb.admin_add_preview_keyboard())
+
+
+def _build_preview_text(data: dict[str, Any]) -> str:
+    lines = [
+        "📋 Превью товара",
+        "",
+        f"Название: {data.get('title', '')}",
+        f"Категория: {data.get('category_title', '')}",
+        f"Цена: {data.get('price', 0)} ₽",
+        f"Описание: {data.get('description', '')}",
+        f"Фото: {len(data.get('photo_urls', []))} шт.",
+        "",
+        "Первое фото будет обложкой.",
+    ]
+    return "\n".join(lines)
+
+
+async def admin_add_save(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None = None,
+) -> None:
+    """Сохранить товар и фото."""
+    if not _is_admin(user_id):
+        await client.send_message(chat_id, NOT_FOUND_TEXT)
+        return
+
+    async with async_session_maker() as session:
+        user_obj = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        state, data = await fsm_service.get_state(session, user_obj.id)
+
+        if state != fsm_service.ADMIN_ADD_PREVIEW:
+            return
+
+        required = ["category_id", "title", "description", "price", "photo_urls"]
+        if not all(data.get(k) for k in required):
+            err = "Не хватает данных для создания товара. Начните заново."
+            if message_id:
+                await client.edit_message(chat_id, message_id, err, reply_markup=kb.admin_back_keyboard())
+            else:
+                await client.send_message(chat_id, err, reply_markup=kb.admin_back_keyboard())
+            return
+
+        product = await admin_service.create_product_with_photos(
+            session=session,
+            category_id=data["category_id"],
+            title=data["title"],
+            description=data["description"],
+            price=data["price"],
+            photo_urls=data["photo_urls"],
+        )
+
+        await fsm_service.clear_state(session, user_obj.id)
+
+    if product is None:
+        err = "Ошибка создания товара. Начните заново."
+        if message_id:
+            await client.edit_message(chat_id, message_id, err, reply_markup=kb.admin_back_keyboard())
+        else:
+            await client.send_message(chat_id, err, reply_markup=kb.admin_back_keyboard())
+        return
+
+    # Показать карточку созданного товара через существующий flow
+    await show_admin_product_detail(client, chat_id, user_id, product.id, message_id)
+
+
+async def admin_add_cancel(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None = None,
+) -> None:
+    """Отменить добавление товара и вернуться к списку категорий."""
+    if not _is_admin(user_id):
+        await client.send_message(chat_id, NOT_FOUND_TEXT)
+        return
+
+    async with async_session_maker() as session:
+        user_obj = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        await fsm_service.clear_state(session, user_obj.id)
+
+    await show_admin_categories(client, chat_id, message_id)
 
 
 def _is_admin(user_id: int | str) -> bool:

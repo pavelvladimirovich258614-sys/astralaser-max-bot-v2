@@ -65,6 +65,13 @@ class UpdateRouter:
             if handled:
                 return
 
+        if fsm_service.is_admin_state(state):
+            handled = await admin_handler.handle_admin_fsm_message(
+                self.client, chat_id, user_id, message_id, text
+            )
+            if handled:
+                return
+
         if text.startswith("/start"):
             await start_handler.handle_start(self.client, chat_id, user_id, user)
         elif text.startswith("/catalog"):
@@ -241,6 +248,24 @@ class UpdateRouter:
                 await admin_handler.admin_exit(self.client, chat_id, user_id, message_id)
             elif data == "admin:back":
                 await admin_handler.admin_back_to_menu(self.client, chat_id, user_id, message_id)
+            elif data == "admin:add:start":
+                await admin_handler.admin_add_start(self.client, chat_id, user_id, message_id)
+            elif data.startswith("admin:add:cat:"):
+                parts = data.split(":")
+                if len(parts) == 4:
+                    try:
+                        category_id = int(parts[3])
+                    except ValueError:
+                        return
+                    await admin_handler.admin_add_category_selected(
+                        self.client, chat_id, user_id, category_id, message_id
+                    )
+            elif data == "admin:add:photos_done":
+                await admin_handler.admin_add_photos_done(self.client, chat_id, user_id, message_id)
+            elif data == "admin:add:save":
+                await admin_handler.admin_add_save(self.client, chat_id, user_id, message_id)
+            elif data == "admin:add:cancel":
+                await admin_handler.admin_add_cancel(self.client, chat_id, user_id, message_id)
             return
 
         # callback patterns с аргументами

@@ -1,6 +1,7 @@
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -9,6 +10,7 @@ from src.bot.handlers import admin as admin_handler
 from src.bot.handlers import start as start_handler
 from src.bot.keyboards import admin_menu_keyboard
 from src.db.models import Base, Category, Order, OrderItem, Product, ProductPhoto, User
+from src.services import fsm_service
 
 
 class RecordingClient:
@@ -664,3 +666,281 @@ async def test_admin_product_back_navigation(monkeypatch, db_session):
     kb = client.calls[0]["reply_markup"]
     payloads = [b["payload"] for row in kb for b in row]
     assert "admin:cat:kole-i-kulony" in payloads
+
+
+# ---------------------------------------------------------------------------
+# Admin add product FSM tests (F10.4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_add_product_start_shows_categories(monkeypatch, db_session):
+    """admin:add:start показывает категории для выбора."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    cat = Category(title="Колье", slug="kole-i-kulony", sort_order=1)
+    db_session.add(cat)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.admin_add_start(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    assert "Добавление товара" in client.calls[0]["text"]
+    kb = client.calls[0]["reply_markup"]
+    assert any("admin:add:cat:" in b["payload"] for row in kb for b in row)
+
+
+@pytest.mark.asyncio
+async def test_admin_add_product_category_selection_sets_title_state(monkeypatch, db_session):
+    """Выбор категории устанавливает state admin:add:title."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    cat = Category(title="Колье", slug="kole-i-kulony", sort_order=1)
+    db_session.add(cat)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.admin_add_category_selected(
+        client, chat_id=1, user_id="4147438", category_id=cat.id, message_id="msg_1"
+    )
+
+    assert len(client.calls) == 1
+    assert "Введите название товара" in client.calls[0]["text"]
+
+    # Проверить state через тот же db_session (StaticPool = shared connection)
+    user = await db_session.scalar(select(User).where(User.max_user_id == "4147438"))
+    assert user is not None
+    state, data = await fsm_service.get_state(db_session, user.id)
+    assert state == fsm_service.ADMIN_ADD_TITLE
+    assert data["category_id"] == cat.id
+
+
+@pytest.mark.asyncio
+async def test_admin_add_product_title_validation(monkeypatch, db_session):
+    """Название валидируется: слишком короткое/длинное — ошибка, остаёмся в state."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, fsm_service.ADMIN_ADD_TITLE, {"category_id": 1})
+
+    client = RecordingClient()
+    handled = await admin_handler.handle_admin_fsm_message(client, chat_id=1, user_id="4147438", message_id="msg_1", text="X")
+    assert handled is True
+    assert client.calls[0]["method"] == "send_message"
+    assert "от 2 до 256 символов" in client.calls[0]["text"]
+
+    client.calls.clear()
+    handled = await admin_handler.handle_admin_fsm_message(client, chat_id=1, user_id="4147438", message_id="msg_1", text="Valid Title")
+    assert handled is True
+    assert client.calls[0]["method"] == "send_message"
+    assert "Введите цену" in client.calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_admin_add_product_price_validation(monkeypatch, db_session):
+    """Цена валидируется: не число, <=0, >1_000_000 — ошибка."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, fsm_service.ADMIN_ADD_PRICE, {"category_id": 1, "title": "Test"})
+
+    client = RecordingClient()
+    for bad_text in ["abc", "0", "-10", "1000001"]:
+        client.calls.clear()
+        handled = await admin_handler.handle_admin_fsm_message(
+            client, chat_id=1, user_id="4147438", message_id="msg_1", text=bad_text
+        )
+        assert handled is True
+        assert client.calls[0]["method"] == "send_message"
+        assert "Попробуйте ещё раз" in client.calls[0]["text"]
+
+    client.calls.clear()
+    handled = await admin_handler.handle_admin_fsm_message(
+        client, chat_id=1, user_id="4147438", message_id="msg_1", text="500"
+    )
+    assert handled is True
+    assert client.calls[0]["method"] == "send_message"
+    assert "Введите описание" in client.calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_admin_add_product_description_validation(monkeypatch, db_session):
+    """Описание валидируется: пустое, >1000 символов — ошибка."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(
+        db_session, user.id, fsm_service.ADMIN_ADD_DESCRIPTION, {"category_id": 1, "title": "Test", "price": 100}
+    )
+
+    client = RecordingClient()
+    handled = await admin_handler.handle_admin_fsm_message(
+        client, chat_id=1, user_id="4147438", message_id="msg_1", text="   "
+    )
+    assert handled is True
+    assert client.calls[0]["method"] == "send_message"
+    assert "пустым" in client.calls[0]["text"].lower()
+
+    client.calls.clear()
+    handled = await admin_handler.handle_admin_fsm_message(
+        client, chat_id=1, user_id="4147438", message_id="msg_1", text="Good description"
+    )
+    assert handled is True
+    assert client.calls[0]["method"] == "send_message"
+    assert "URL фото" in client.calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_admin_add_product_photos_collection(monkeypatch, db_session):
+    """Шаг photos накапливает валидные URL и показывает счётчик."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(
+        db_session,
+        user.id,
+        fsm_service.ADMIN_ADD_PHOTOS,
+        {"category_id": 1, "title": "Test", "price": 100, "description": "Desc", "photo_urls": []},
+    )
+
+    client = RecordingClient()
+    handled = await admin_handler.handle_admin_fsm_message(
+        client, chat_id=1, user_id="4147438", message_id="msg_1", text="not_a_url"
+    )
+    assert handled is True
+    assert client.calls[0]["method"] == "send_message"
+    assert "Не найдено валидных URL" in client.calls[0]["text"]
+
+    client.calls.clear()
+    handled = await admin_handler.handle_admin_fsm_message(
+        client, chat_id=1, user_id="4147438", message_id="msg_1", text="https://example.com/1.jpg\nhttps://example.com/2.jpg"
+    )
+    assert handled is True
+    assert client.calls[0]["method"] == "send_message"
+    assert "Добавлено фото: 2" in client.calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_admin_add_product_photos_done_requires_photo(monkeypatch, db_session):
+    """admin:add:photos_done без фото показывает ошибку."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(
+        db_session,
+        user.id,
+        fsm_service.ADMIN_ADD_PHOTOS,
+        {"category_id": 1, "title": "Test", "price": 100, "description": "Desc", "photo_urls": []},
+    )
+
+    client = RecordingClient()
+    await admin_handler.admin_add_photos_done(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    assert "минимум одно фото" in client.calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_admin_add_product_save_creates_product_and_photos(monkeypatch, db_session):
+    """admin:add:save создаёт товар и фото, очищает state."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    cat = Category(title="Колье", slug="kole-i-kulony", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.flush()
+    await fsm_service.set_state(
+        db_session,
+        user.id,
+        fsm_service.ADMIN_ADD_PREVIEW,
+        {
+            "category_id": cat.id,
+            "category_title": "Колье",
+            "title": "Кулон",
+            "price": 840,
+            "description": "Описание",
+            "photo_urls": ["https://example.com/1.jpg", "https://example.com/2.jpg"],
+        },
+    )
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.admin_add_save(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    text = client.calls[0]["text"]
+    assert "Кулон" in text
+    assert "840 ₽" in text
+
+    state, data = await fsm_service.get_state(db_session, user.id)
+    assert state is None
+
+
+@pytest.mark.asyncio
+async def test_admin_add_product_cancel_clears_state(monkeypatch, db_session):
+    """admin:add:cancel очищает state и возвращает к категориям."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(
+        db_session, user.id, fsm_service.ADMIN_ADD_TITLE, {"category_id": 1, "title": "Test"}
+    )
+
+    client = RecordingClient()
+    await admin_handler.admin_add_cancel(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    # Возвращает к show_admin_categories, которая в пустой БД покажет placeholder
+    assert client.calls[0]["method"] in ("edit_message", "send_message")
+
+    state, data = await fsm_service.get_state(db_session, user.id)
+    assert state is None
+
+
+@pytest.mark.asyncio
+async def test_admin_add_product_denied_for_regular_user(monkeypatch):
+    """Обычный пользователь не может начать добавление товара."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+    client = RecordingClient()
+
+    await admin_handler.admin_add_start(client, chat_id=1, user_id="99999", message_id="msg_1")
+    assert len(client.calls) == 1
+    assert "Команда не найдена" in client.calls[0]["text"]
+
+    client.calls.clear()
+    handled = await admin_handler.handle_admin_fsm_message(
+        client, chat_id=1, user_id="99999", message_id="msg_1", text="Test"
+    )
+    assert handled is True
+    assert "Команда не найдена" in client.calls[0]["text"]
+
+    client.calls.clear()
+    await admin_handler.admin_add_photos_done(client, chat_id=1, user_id="99999", message_id="msg_1")
+    assert len(client.calls) == 1
+    assert "Команда не найдена" in client.calls[0]["text"]
+
+    client.calls.clear()
+    await admin_handler.admin_add_save(client, chat_id=1, user_id="99999", message_id="msg_1")
+    assert len(client.calls) == 1
+    assert "Команда не найдена" in client.calls[0]["text"]
+
+    client.calls.clear()
+    await admin_handler.admin_add_cancel(client, chat_id=1, user_id="99999", message_id="msg_1")
+    assert len(client.calls) == 1
+    assert "Команда не найдена" in client.calls[0]["text"]

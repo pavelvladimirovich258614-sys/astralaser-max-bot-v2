@@ -37,3 +37,38 @@ async def toggle_active(session: AsyncSession, product_id: int) -> Product | Non
     product.is_active = not product.is_active
     await session.commit()
     return product
+
+
+async def create_product(
+    session: AsyncSession,
+    category_id: int,
+    title: str,
+    description: str,
+    price: int,
+    cover_url: str,
+    sort_order: int,
+    is_active: bool = True,
+) -> Product:
+    """Создать новый товар."""
+    product = Product(
+        category_id=category_id,
+        title=title,
+        description=description,
+        price=price,
+        cover_url=cover_url,
+        sort_order=sort_order,
+        is_active=is_active,
+    )
+    session.add(product)
+    await session.flush()
+    return product
+
+
+async def get_max_sort_order(session: AsyncSession, category_id: int) -> int:
+    """Вернуть максимальный sort_order в категории или 0 если категория пуста."""
+    from sqlalchemy import func
+
+    result = await session.execute(
+        select(func.coalesce(func.max(Product.sort_order), 0)).where(Product.category_id == category_id)
+    )
+    return result.scalar_one()

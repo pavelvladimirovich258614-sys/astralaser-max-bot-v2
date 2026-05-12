@@ -255,3 +255,37 @@ def admin_product_detail_keyboard(product_id: int, is_active: bool, category_slu
         [{"type": "callback", "text": toggle_text, "payload": f"admin:product_toggle:{product_id}"}],
         [{"type": "callback", "text": "🔙 Назад", "payload": f"admin:cat:{category_slug}"}],
     ]
+
+
+def admin_add_start_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура добавления товара в экране категорий."""
+    return [
+        [{"type": "callback", "text": "➕ Добавить товар", "payload": "admin:add:start"}],
+    ]
+
+
+def admin_add_categories_keyboard(categories: list[Any]) -> list[list[dict[str, Any]]]:
+    """Клавиатура выбора категории при добавлении товара."""
+    buttons: list[list[dict[str, Any]]] = []
+    for item in categories:
+        cat = item["category"] if isinstance(item, dict) else item
+        cat_id = cat.id
+        buttons.append([{"type": "callback", "text": cat.title, "payload": f"admin:add:cat:{cat_id}"}])
+    buttons.append([{"type": "callback", "text": "🔙 Назад", "payload": "admin:products"}])
+    return buttons
+
+
+def admin_add_photos_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура шага сбора фото: Готово / Отмена."""
+    return [
+        [{"type": "callback", "text": "✅ Готово", "payload": "admin:add:photos_done"}],
+        [{"type": "callback", "text": "❌ Отмена", "payload": "admin:add:cancel"}],
+    ]
+
+
+def admin_add_preview_keyboard() -> list[list[dict[str, Any]]]:
+    """Клавиатура превью товара: Сохранить / Отмена."""
+    return [
+        [{"type": "callback", "text": "✅ Сохранить", "payload": "admin:add:save"}],
+        [{"type": "callback", "text": "❌ Отмена", "payload": "admin:add:cancel"}],
+    ]

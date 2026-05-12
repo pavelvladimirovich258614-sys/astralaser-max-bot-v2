@@ -382,3 +382,136 @@ async def test_toggle_product_active_returns_none_for_missing_product(db_session
     """toggle_product_active возвращает None для несуществующего товара."""
     result = await admin_service.toggle_product_active(db_session, 99999)
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Product creation (F10.4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_product_saves_fields(db_session):
+    """create_product сохраняет все поля корректно."""
+    from src.db.crud import product as product_crud
+
+    cat = Category(title="Test", slug="test", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = await product_crud.create_product(
+        session=db_session,
+        category_id=cat.id,
+        title="Кулон",
+        description="Описание",
+        price=840,
+        cover_url="https://example.com/cover.jpg",
+        sort_order=1,
+        is_active=True,
+    )
+    await db_session.commit()
+
+    assert product.id is not None
+    assert product.title == "Кулон"
+    assert product.description == "Описание"
+    assert product.price == 840
+    assert product.cover_url == "https://example.com/cover.jpg"
+    assert product.sort_order == 1
+    assert product.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_create_product_photos_saves_urls(db_session):
+    """create_photos сохраняет URL с правильным sort_order."""
+    from src.db.crud import product as product_crud
+    from src.db.crud import product_photo as product_photo_crud
+
+    cat = Category(title="Test", slug="test", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = await product_crud.create_product(
+        session=db_session,
+        category_id=cat.id,
+        title="Кулон",
+        description="Desc",
+        price=100,
+        cover_url="url1",
+        sort_order=1,
+    )
+    await db_session.flush()
+
+    photos = await product_photo_crud.create_photos(db_session, product.id, ["url1", "url2", "url3"])
+    await db_session.commit()
+
+    assert len(photos) == 3
+    assert photos[0].url == "url1"
+    assert photos[0].sort_order == 0
+    assert photos[1].url == "url2"
+    assert photos[1].sort_order == 1
+    assert photos[2].max_photo_token is None
+
+
+@pytest.mark.asyncio
+async def test_get_max_sort_order_returns_max(db_session):
+    """get_max_sort_order возвращает максимальный sort_order в категории."""
+    from src.db.crud import product as product_crud
+
+    cat = Category(title="Test", slug="test", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    assert await product_crud.get_max_sort_order(db_session, cat.id) == 0
+
+    p1 = Product(category_id=cat.id, title="A", description="D", price=100, cover_url="url", sort_order=3)
+    p2 = Product(category_id=cat.id, title="B", description="D", price=200, cover_url="url", sort_order=7)
+    db_session.add_all([p1, p2])
+    await db_session.commit()
+
+    assert await product_crud.get_max_sort_order(db_session, cat.id) == 7
+
+
+@pytest.mark.asyncio
+async def test_create_product_with_photos_sets_cover_url_and_sort_order(db_session):
+    """create_product_with_photos создаёт товар и фото, cover_url = первый URL."""
+    cat = Category(title="Test", slug="test", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = await admin_service.create_product_with_photos(
+        session=db_session,
+        category_id=cat.id,
+        title="Кулон",
+        description="Desc",
+        price=500,
+        photo_urls=["https://example.com/1.jpg", "https://example.com/2.jpg"],
+    )
+
+    assert product is not None
+    assert product.title == "Кулон"
+    assert product.cover_url == "https://example.com/1.jpg"
+    assert product.sort_order == 1
+
+    from src.db.crud import product_photo as product_photo_crud
+
+    photos = await product_photo_crud.get_by_product_id(db_session, product.id)
+    assert len(photos) == 2
+    assert photos[0].url == "https://example.com/1.jpg"
+    assert photos[1].url == "https://example.com/2.jpg"
+
+
+@pytest.mark.asyncio
+async def test_create_product_with_photos_requires_at_least_one_photo(db_session):
+    """create_product_with_photos возвращает None если photo_urls пустой."""
+    cat = Category(title="Test", slug="test", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = await admin_service.create_product_with_photos(
+        session=db_session,
+        category_id=cat.id,
+        title="Кулон",
+        description="Desc",
+        price=500,
+        photo_urls=[],
+    )
+    assert product is None

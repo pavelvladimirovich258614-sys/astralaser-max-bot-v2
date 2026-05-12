@@ -4,12 +4,88 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10.3 implemented, live-test passed, committed, pushed
+**Статус проекта:** F10.4.1 implemented, live-test passed, committed, pushed
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (F10.3 live-test passed)
-**Последний коммит:** `feat(F10.3): add admin product visibility management`
-**Тесты:** 241 passed
+**Текущая фича:** F10 — Админ-панель (F10.4.1 live-test passed)
+**Последний коммит:** `feat(F10): add admin product creation FSM`
+**Тесты:** 263 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-12 (F10.4.1 implemented + live-test passed)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10.4.1 — Добавление товара через FSM (admin add product)
+**Status:** implemented, live-test passed, committed, pushed
+
+### What was done
+
+- `src/bot/handlers/admin.py`: добавлен полный F10.4.1 admin add product FSM:
+  - `admin_add_start` — выбор категории для нового товара.
+  - `admin_add_category_selected` — сохранение category_id и переход к state `admin:add:title`.
+  - `handle_admin_fsm_message` — роутер текстовых сообщений в admin FSM.
+  - `_handle_admin_add_title` — валидация названия (2–256 символов), переход к `admin:add:price`.
+  - `_handle_admin_add_price` — валидация цены (1–1_000_000 ₽), переход к `admin:add:description`.
+  - `_handle_admin_add_description` — валидация описания (≤1000 символов), переход к `admin:add:photos`.
+  - `_handle_admin_add_photos` — сбор URL фото (http:// или https://), накопление в `photo_urls`.
+  - `admin_add_photos_done` — проверка минимум 1 фото, переход к `admin:add:preview`.
+  - `_show_admin_add_preview` / `_build_preview_text` — превью товара перед сохранением.
+  - `admin_add_save` — создание Product + ProductPhoto через `admin_service.create_product_with_photos`, cover_url = первое фото, sort_order = max + 1.
+  - `admin_add_cancel` — отмена добавления, очистка state, возврат к категориям.
+- `src/bot/keyboards.py`: добавлены 4 новые клавиатуры:
+  - `admin_add_start_keyboard` (кнопка ➕ Добавить товар).
+  - `admin_add_categories_keyboard` (список категорий для выбора).
+  - `admin_add_photos_keyboard` (✅ Готово / ❌ Отмена).
+  - `admin_add_preview_keyboard` (✅ Сохранить / ❌ Отмена).
+- `src/bot/router.py`: routing для `admin:add:start`, `admin:add:cat:{id}`, `admin:add:photos_done`, `admin:add:save`, `admin:add:cancel` + маршрутизация текстовых сообщений в `handle_admin_fsm_message` после проверки order FSM.
+- `src/services/fsm_service.py`: добавлены `is_admin_state` и константы `ADMIN_ADD_*` с префиксом `admin:add:` для изоляции от `order:*` FSM.
+- `src/services/admin_service.py`: добавлены `get_next_product_sort_order`, `create_product_with_photos`, `get_admin_category_by_id`.
+- `src/db/crud/product.py`: добавлены `create_product` и `get_max_sort_order`.
+- `src/db/crud/product_photo.py`: добавлена `create_photos`.
+- `tests/test_admin.py`: +10 тестов FSM flow (start, category, title validation, price validation, description validation, photos collection, photos done, save, cancel, access denied).
+- `tests/test_admin_service.py`: +5 тестов (create product, create photos, max sort order, create with photos, missing photos guard).
+- `tests/test_router.py`: +7 тестов routing (start, cat, photos_done, save, cancel, admin state message, order state priority).
+
+### BUILD FIX — text-step response bug
+
+**Bug:** После ввода названия товара бот не показывал следующий шаг (цена).  
+**Root cause:** В `_handle_admin_add_title`, `_handle_admin_add_price`, `_handle_admin_add_description`, `_handle_admin_add_photos` использовался `edit_message(chat_id, message_id, ...)`. Для `message_created` события `message_id` — это `mid` **входящего сообщения пользователя**, а MAX API не позволяет редактировать сообщения пользователя через `PUT /messages`.  
+**Fix:** Во всех 4 text-step хендлерах заменено на `send_message(chat_id, ...)` — новое сообщение бота на каждом шаге. Callback-экраны (start, cat, preview, save, cancel) оставлены через `edit_message`, т.к. там `message_id` принадлежит сообщению бота.  
+**Tests updated:** asserts `method == "send_message"` добавлены в `test_admin.py` для FSM text-step тестов.
+
+### Evidence
+
+- pytest: 263 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 36 source files ✅
+- init.ps1: === READY === ✅
+- Live-test MAX:
+  - admin:add:start → выбор категории ✅
+  - Выбор категории → ввод названия ✅
+  - Ввод названия → ввод цены ✅
+  - Ввод цены → ввод описания ✅
+  - Ввод описания → ввод URL фото ✅
+  - Ввод URL фото → накопление фото, кнопка ✅ Готово ✅
+  - admin:add:photos_done → превью товара ✅
+  - admin:add:save → товар создан, появился в админке и клиентском каталоге ✅
+  - Товар скрыт через admin:product_toggle → исчез из клиентского каталога ✅
+  - admin:add:cancel → state очищен, возврат к категориям ✅
+  - Ошибок 400/500/traceback — нет ✅
+
+### Scope guard
+
+- F10.5 (Рассылка) — не начата ✅
+- «Наши работы» — не реализована ✅
+- MAX upload — не добавлен (фото сохраняются как URL с `max_photo_token=None`) ✅
+- Физическое удаление товара — не добавлено (soft-delete через `is_active` из F10.3) ✅
+- БД-модели, миграции, seed, `.env`, `docs/TZ.md` — не изменены ✅
+- `feature_list.json` — не изменён (F10 остаётся `in_progress`) ✅
+
+### Next best action
+
+1. Человек обновляет `feature_list.json` (F10 evidence) после verification.
+2. Приступить к F10.5 (Рассылка) по explicit approve — или закрыть F10 целиком, если F10.5 не нужна.
 
 ---
 
