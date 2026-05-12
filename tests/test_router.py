@@ -881,4 +881,5 @@ async def test_router_message_in_broadcast_state_routes_to_admin_handler(router,
     monkeypatch.setattr(admin_handler, "async_session_maker", test_session_maker)
 
     await r.process(_make_message_payload("Hello broadcast", user_id="900"))
+    assert any(c.get("method") == "send_message" for c in client.calls)
     assert any("Предпросмотр рассылки" in c.get("text", "") for c in client.calls)

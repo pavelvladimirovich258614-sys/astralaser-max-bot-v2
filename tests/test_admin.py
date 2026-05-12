@@ -1037,6 +1037,7 @@ async def test_admin_broadcast_text_valid_shows_preview(monkeypatch, db_session)
         client, chat_id=1, user_id="4147438", message_id="msg_1", text="Привет всем!"
     )
     assert handled is True
+    assert client.calls[0]["method"] == "send_message"
     assert "Предпросмотр рассылки" in client.calls[0]["text"]
     assert "Привет всем!" in client.calls[0]["text"]
     kb = client.calls[0]["reply_markup"]

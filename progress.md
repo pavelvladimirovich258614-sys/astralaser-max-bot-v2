@@ -4,10 +4,10 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10.5.1 implemented, BUILD passed, live-test pending
+**Статус проекта:** F10.5.1 broadcast draft/preview bugfix live-test passed, ready to commit/push
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (F10.5.1 BUILD passed, live-test pending)
-**Последний коммит:** `feat(F10.5.1): add admin broadcast draft and preview`
+**Текущая фича:** F10 — Админ-панель (F10.5.1 bugfix live-test passed; F10.5.2 not started)
+**Последний коммит:** `feat(F10.5.1): add admin broadcast draft and preview` (pushed to origin/main)
 **Тесты:** 275 passed
 **Блокер:** нет
 
@@ -40,6 +40,7 @@
 - ruff: exit 0 ✅
 - mypy: Success: no issues found in 36 source files ✅
 - init.ps1: === READY === ✅
+- git push: `dd81a36` pushed to `origin/main` ✅
 - Live-test MAX: **не проведён в этой сессии** ⏳
 
 ### Scope guard
@@ -55,8 +56,63 @@
 ### Next best action
 
 1. Провести live-test в MAX: admin broadcast flow (📤 Рассылка → ввод текста → preview → Отмена / Отправить).
-2. После успешного live-test — `git commit` + `git push origin main`.
-3. Приступить к F10.5.2 (фактическая отправка рассылки с throttling) по explicit approve — или закрыть F10 целиком, если F10.5.2 не нужна.
+2. Приступить к F10.5.2 (фактическая отправка рассылки с throttling) по explicit approve — или закрыть F10 целиком, если F10.5.2 не нужна.
+3. Человек обновляет `feature_list.json` (F10 evidence) после verification.
+
+### Session closure note
+- Commit `dd81a36` pushed to `origin/main` ✅
+- `progress.md` updated ✅
+- Working tree clean ✅
+- Сессия закрыта агентом по команде пользователя. Live-test F10.5.1 переносится на следующую сессию.
+
+---
+
+## Session Record — 2026-05-12 (F10.5.1 bugfix: broadcast text-step)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10.5.1 — Рассылка: draft и preview (bugfix)
+**Status:** live-test passed, ready to commit/push
+
+### What was done
+
+- `src/bot/handlers/admin.py`: в `_handle_admin_broadcast_text` убрано ветвление `if message_id: edit_message(...) else: send_message(...)`.
+- При валидном тексте рассылки preview теперь **всегда** отправляется через `send_message(chat_id, ...)` вместо `edit_message(chat_id, message_id, ...)`.
+- **Root cause:** `_handle_admin_broadcast_text` вызывается из `message_created`, а `message_id` принадлежит входящему сообщению пользователя. MAX API возвращает 200 OK на `PUT /messages` с user message_id, но визуально чат не обновляет чужие сообщения.
+- `tests/test_admin.py`: добавлен assert `client.calls[0]["method"] == "send_message"` в `test_admin_broadcast_text_valid_shows_preview`.
+- `tests/test_router.py`: добавлен assert `any(c.get("method") == "send_message" ...)` в `test_router_message_in_broadcast_state_routes_to_admin_handler`.
+
+### Evidence
+
+- pytest: 275 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 36 source files ✅
+- init.ps1: === READY === ✅
+- Live-test MAX:
+  - `/admin` → 🛠 Админ-панель ✅
+  - 📤 Рассылка → prompt для ввода текста ✅
+  - Ввод `-` → preview с кнопками ✅ Отправить / ❌ Отмена ✅
+  - ❌ Отмена → корректный возврат в админ-панель ✅
+  - Повторно 📤 Рассылка → ввод `Тест` → preview ✅
+  - ✅ Отправить → safe placeholder «Отправка рассылки будет реализована в F10.5.2» ✅
+  - В логах uvicorn: после ввода текста используется `POST /messages?chat_id=...`, а не `PUT` по user message_id ✅
+  - Callback `admin:broadcast:send` корректно использует `edit_message` по bot preview message_id ✅
+
+### Scope guard
+
+- F10.5.2 (фактическая массовая отправка всем User) — не начата ✅
+- Массовая отправка пользователям — не выполнялась и не добавлена ✅
+- `feature_list.json` — не изменён (F10 остаётся `in_progress`) ✅
+- БД-модели, миграции, seed, `.env`, `docs/TZ.md` — не изменены ✅
+
+### Next best action
+
+1. Commit + push bugfix.
+2. Продолжить только по explicit approve: либо начать F10.5.2 (фактическая отправка рассылки с throttling), либо закрыть F10 целиком, если F10.5.2 не нужна.
+3. Человек обновляет `feature_list.json` (F10 evidence) после verification.
+
+### Session closure note
+- Bugfix реализован, BUILD прошёл, live-test MAX пройден ✅
+- Изменения готовы к commit/push ✅
 
 ---
 

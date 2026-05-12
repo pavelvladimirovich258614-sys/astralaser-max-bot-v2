@@ -696,10 +696,7 @@ async def _handle_admin_broadcast_text(
         f"{broadcast_text}\n\n"
         "Отправить это сообщение всем пользователям?"
     )
-    if message_id:
-        await client.edit_message(chat_id, message_id, preview, reply_markup=kb.admin_broadcast_preview_keyboard())
-    else:
-        await client.send_message(chat_id, preview, reply_markup=kb.admin_broadcast_preview_keyboard())
+    await client.send_message(chat_id, preview, reply_markup=kb.admin_broadcast_preview_keyboard())
     return True
 
 
