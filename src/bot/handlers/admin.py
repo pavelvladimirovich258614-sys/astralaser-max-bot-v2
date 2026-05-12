@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, cast
 
 from src.bot import keyboards as kb
@@ -439,7 +440,7 @@ async def admin_broadcast_send(
     user_id: int | str,
     message_id: str | None = None,
 ) -> None:
-    """Безопасная заглушка для отправки рассылки (F10.5.2)."""
+    """Отправить рассылку (F10.5.2)."""
     if not _is_admin(user_id):
         await client.send_message(chat_id, NOT_FOUND_TEXT)
         return
@@ -447,9 +448,49 @@ async def admin_broadcast_send(
     async with async_session_maker() as session:
         user_obj = await user_service.get_or_create_user(session, max_user_id=str(user_id))
         await session.commit()
+        state, data = await fsm_service.get_state(session, user_obj.id)
+        broadcast_text = data.get("broadcast_text") if data else None
+
+        if not broadcast_text:
+            await fsm_service.clear_state(session, user_obj.id)
+            text = "❌ Текст рассылки не найден. Начните заново через /admin → 📤 Рассылка."
+            if message_id:
+                await client.edit_message(chat_id, message_id, text, reply_markup=kb.admin_back_keyboard())
+            else:
+                await client.send_message(chat_id, text, reply_markup=kb.admin_back_keyboard())
+            return
+
+        plan = await admin_service.prepare_broadcast_plan(session, broadcast_text)
+
+        if not plan.enabled:
+            await fsm_service.clear_state(session, user_obj.id)
+            text = (
+                "📤 Рассылка не отправлена.\n\n"
+                "Рассылка отключена настройкой BROADCAST_ENABLED=false.\n"
+                f"Потенциальных получателей: {plan.total_recipients}.\n"
+                "Для реальной отправки нужен отдельный approve."
+            )
+            if message_id:
+                await client.edit_message(chat_id, message_id, text, reply_markup=kb.admin_back_keyboard())
+            else:
+                await client.send_message(chat_id, text, reply_markup=kb.admin_back_keyboard())
+            return
+
+        # enabled=True — выполняем отправку
+        sent_count = 0
+        failed_count = 0
+        for recipient in plan.recipients:
+            try:
+                await client.send_message(recipient.max_user_id, plan.text)
+                sent_count += 1
+            except Exception:
+                failed_count += 1
+            if plan.throttle_ms > 0:
+                await asyncio.sleep(plan.throttle_ms / 1000)
+
         await fsm_service.clear_state(session, user_obj.id)
 
-    text = "📤 Отправка рассылки будет реализована в F10.5.2."
+    text = f"📤 Рассылка завершена: отправлено {sent_count}, ошибок {failed_count}."
     if message_id:
         await client.edit_message(chat_id, message_id, text, reply_markup=kb.admin_back_keyboard())
     else:

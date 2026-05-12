@@ -4,12 +4,79 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10.5.2a broadcast plan service implemented and verified, committed and pushed
+**Статус проекта:** F10.5.2b handler connected to broadcast plan; disabled-safe live-test passed; committed and pushed
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (F10.5.2a service-level broadcast plan done; F10.5.2b not started)
-**Последний коммит:** `feat(F10.5.2a): add broadcast plan service` (pushed to origin/main)
-**Тесты:** 282 passed
+**Текущая фича:** F10 — Админ-панель (F10.5.2b done; F10.5.2c not started)
+**Последний коммит:** `feat(F10.5.2b): connect broadcast send handler safely` (pushed to origin/main)
+**Тесты:** 285 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-12 (F10.5.2b implemented + verified + live-test passed)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10.5.2b — Connect admin:broadcast:send to broadcast plan safely
+**Status:** implemented, verified, live-test passed, committed, pushed
+
+### What was done
+
+- `src/bot/handlers/admin.py`: `admin_broadcast_send` заменён с safe placeholder на реальную логику с safety guard:
+  - Читает `broadcast_text` из FSM data; если текста нет — показывает ошибку админу и очищает state.
+  - Вызывает `prepare_broadcast_plan(session, broadcast_text)`.
+  - Если `plan.enabled is False` — **не отправляет сообщения пользователям**, показывает админу safe summary с количеством потенциальных получателей.
+  - Если `plan.enabled is True` — best-effort цикл `client.send_message(recipient.max_user_id, plan.text)` с `asyncio.sleep(throttle_ms / 1000)`, подсчёт `sent_count` / `failed_count`.
+  - Очищает FSM state после завершения.
+- `tests/test_admin.py`:
+  - `_make_settings` обновлён: добавлены `broadcast_enabled`, `broadcast_max_recipients`, `broadcast_throttle_ms`.
+  - `test_admin_broadcast_send_disabled_shows_safe_summary` — проверяет disabled flow, нет отправки пользователям.
+  - `test_admin_broadcast_send_without_text_shows_error` — проверяет отсутствие текста в state.
+  - `test_admin_broadcast_send_enabled_best_effort` — проверяет отправку при `enabled=true` (monkeypatch env).
+  - `test_admin_broadcast_send_respects_max_recipients` — проверяет ограничение `max_recipients`.
+- `tests/test_router.py`: обновлён `test_router_callback_admin_broadcast_send_routes_to_handler` для нового поведения (нет FSM data → ошибка "Текст рассылки не найден").
+
+### Safety checklist
+
+- `.env` проверен: `Select-String -Path .env -Pattern "^BROADCAST_"` — вывода нет, используются безопасные дефолты ✅
+- `BROADCAST_ENABLED=false` по умолчанию ✅
+- Disabled live-test подтвердил: реальная отправка пользователям **не выполнялась** ✅
+- Потенциальных получателей показано: 2 ✅
+- `MAXClient` не импортирован в `src/services/admin_service.py` ✅
+- `.env`, `.env.example`, `src/config.py`, `src/db/crud/user.py`, `src/services/admin_service.py` — не изменены в этом шаге ✅
+
+### Evidence
+
+- pytest: 285 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 36 source files ✅
+- init.ps1: Architecture OK, === READY === ✅
+- Health-check: `curl.exe https://astralaser.ai-agent-paul.ru/health` → `{"status":"ok"}` ✅
+- Live-test MAX:
+  - `/admin` → 🛠 Админ-панель ✅
+  - 📤 Рассылка → prompt для ввода текста ✅
+  - Ввод "Тест F10.5.2b safety" → preview с кнопками ✅ Отправить / ❌ Отмена ✅
+  - ✅ Отправить → safe summary:
+    > 📤 Рассылка не отправлена.
+    > Рассылка отключена настройкой BROADCAST_ENABLED=false.
+    > Потенциальных получателей: 2.
+    > Для реальной отправки нужен отдельный approve.
+  - Реальная отправка пользователям **не выполнялась** ✅
+  - Ошибок 400/500/traceback — нет ✅
+
+### Scope guard
+
+- `.env` — не изменён ✅
+- `.env.example` — не изменён ✅
+- `src/config.py` — не изменён ✅
+- `src/db/crud/user.py` — не изменён ✅
+- `src/services/admin_service.py` — не изменён ✅
+- `feature_list.json` — не изменён (F10 остаётся `in_progress`) ✅
+- Реальная массовая отправка пользователям — не запускалась ✅
+- F10.5.2c (live-test с BROADCAST_ENABLED=true) — не начата ✅
+
+### Next best action
+
+- F10.5.2c — explicit approve only, controlled live-test с `BROADCAST_ENABLED=true` и `BROADCAST_MAX_RECIPIENTS=1` или `2` на тестовых аккаунтах.
 
 ---
 

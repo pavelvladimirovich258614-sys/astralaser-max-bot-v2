@@ -845,7 +845,10 @@ async def test_router_callback_admin_broadcast_send_routes_to_handler(router, mo
     from src.bot.handlers import admin as admin_handler
 
     r, client = router
-    monkeypatch.setattr("src.bot.handlers.admin.get_settings", lambda: type("S", (), {"admin_ids_list": ["123"]})())
+    monkeypatch.setattr(
+        "src.bot.handlers.admin.get_settings",
+        lambda: type("S", (), {"admin_ids_list": ["123"], "broadcast_enabled": False, "broadcast_max_recipients": 0, "broadcast_throttle_ms": 500})(),
+    )
 
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -856,7 +859,7 @@ async def test_router_callback_admin_broadcast_send_routes_to_handler(router, mo
 
     await r.process(_make_callback_payload("admin:broadcast:send", user_id="123"))
     assert len(client.calls) == 1
-    assert "F10.5.2" in client.calls[0].get("text", "")
+    assert "Текст рассылки не найден" in client.calls[0].get("text", "")
 
 
 @pytest.mark.asyncio

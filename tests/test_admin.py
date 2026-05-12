@@ -67,8 +67,15 @@ async def override_admin_session_maker(monkeypatch, async_engine):
         await conn.run_sync(Base.metadata.drop_all)
 
 
-def _make_settings(admin_ids: list[str]):
-    return type("S", (), {"admin_ids_list": admin_ids})()
+def _make_settings(admin_ids: list[str], **kwargs):
+    defaults = {
+        "admin_ids_list": admin_ids,
+        "broadcast_enabled": False,
+        "broadcast_max_recipients": 0,
+        "broadcast_throttle_ms": 500,
+    }
+    defaults.update(kwargs)
+    return type("S", (), defaults)()
 
 
 # ---------------------------------------------------------------------------
@@ -1063,22 +1070,126 @@ async def test_admin_broadcast_cancel_clears_state(monkeypatch, db_session):
 
 
 @pytest.mark.asyncio
-async def test_admin_broadcast_send_is_safe_placeholder_for_now(monkeypatch, db_session):
-    """admin:broadcast:send показывает безопасную заглушку и очищает state."""
+async def test_admin_broadcast_send_disabled_shows_safe_summary(monkeypatch, db_session):
+    """admin:broadcast:send при BROADCAST_ENABLED=false показывает summary без отправки."""
     monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
 
     user = User(max_user_id="4147438", full_name="Admin")
     db_session.add(user)
-    await db_session.commit()
+    await db_session.flush()
     await fsm_service.set_state(db_session, user.id, fsm_service.ADMIN_BROADCAST_TEXT, {"broadcast_text": "Test"})
+    await db_session.commit()
 
     client = RecordingClient()
     await admin_handler.admin_broadcast_send(client, chat_id=1, user_id="4147438", message_id="msg_1")
 
     assert len(client.calls) == 1
-    assert "F10.5.2" in client.calls[0]["text"]
+    text = client.calls[0]["text"]
+    assert "Рассылка не отправлена" in text
+    assert "отключена" in text.lower()
+    assert "Потенциальных получателей: 0" in text
 
     state, data = await fsm_service.get_state(db_session, user.id)
+    assert state is None
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_send_without_text_shows_error(monkeypatch, db_session):
+    """admin:broadcast:send без broadcast_text в state показывает ошибку."""
+    monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
+
+    user = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(user)
+    await db_session.commit()
+    await fsm_service.set_state(db_session, user.id, fsm_service.ADMIN_BROADCAST_TEXT, {})
+
+    client = RecordingClient()
+    await admin_handler.admin_broadcast_send(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    assert "Текст рассылки не найден" in client.calls[0]["text"]
+
+    state, data = await fsm_service.get_state(db_session, user.id)
+    assert state is None
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_send_enabled_best_effort(monkeypatch, db_session):
+    """admin:broadcast:send при enabled=true отправляет сообщения best-effort."""
+    from src.db.crud import user as user_crud
+
+    monkeypatch.setenv("BROADCAST_ENABLED", "true")
+    monkeypatch.setenv("BROADCAST_THROTTLE_MS", "0")
+
+    # Создать админа
+    admin = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(admin)
+    await db_session.flush()
+    await fsm_service.set_state(db_session, admin.id, fsm_service.ADMIN_BROADCAST_TEXT, {"broadcast_text": "Hello"})
+
+    # Создать consented получателей
+    for i in range(3):
+        user = User(max_user_id=f"u{i}", full_name=f"User{i}")
+        db_session.add(user)
+        await db_session.flush()
+        await user_crud.update_consent(db_session, user)
+
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.admin_broadcast_send(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    # Должно быть 3 вызова send_message получателям + 1 edit_message админу
+    send_calls = [c for c in client.calls if c["method"] == "send_message"]
+    assert len(send_calls) == 3
+
+    for c in send_calls:
+        assert c["text"] == "Hello"
+
+    edit_calls = [c for c in client.calls if c["method"] == "edit_message"]
+    assert len(edit_calls) == 1
+    assert "Рассылка завершена" in edit_calls[0]["text"]
+    assert "отправлено 3" in edit_calls[0]["text"]
+    assert "ошибок 0" in edit_calls[0]["text"]
+
+    state, data = await fsm_service.get_state(db_session, admin.id)
+    assert state is None
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_send_respects_max_recipients(monkeypatch, db_session):
+    """admin:broadcast:send при max_recipients=1 отправляет только одному."""
+    from src.db.crud import user as user_crud
+
+    monkeypatch.setenv("BROADCAST_ENABLED", "true")
+    monkeypatch.setenv("BROADCAST_MAX_RECIPIENTS", "1")
+    monkeypatch.setenv("BROADCAST_THROTTLE_MS", "0")
+
+    admin = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(admin)
+    await db_session.flush()
+    await fsm_service.set_state(db_session, admin.id, fsm_service.ADMIN_BROADCAST_TEXT, {"broadcast_text": "Hello"})
+
+    for i in range(2):
+        user = User(max_user_id=f"u{i}", full_name=f"User{i}")
+        db_session.add(user)
+        await db_session.flush()
+        await user_crud.update_consent(db_session, user)
+
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.admin_broadcast_send(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    send_calls = [c for c in client.calls if c["method"] == "send_message"]
+    assert len(send_calls) == 1
+    assert send_calls[0]["text"] == "Hello"
+
+    edit_calls = [c for c in client.calls if c["method"] == "edit_message"]
+    assert len(edit_calls) == 1
+    assert "отправлено 1" in edit_calls[0]["text"]
+
+    state, data = await fsm_service.get_state(db_session, admin.id)
     assert state is None
 
 
