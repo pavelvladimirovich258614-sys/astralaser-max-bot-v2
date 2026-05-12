@@ -23,3 +23,12 @@ async def update_consent(session: AsyncSession, user: User) -> User:
     await session.commit()
     await session.refresh(user)
     return user
+
+
+async def get_broadcast_recipients(session: AsyncSession, limit: int | None = None) -> list[User]:
+    """Получить пользователей для рассылки: только с consent_at IS NOT NULL, сортировка по id ASC."""
+    stmt = select(User).where(User.consent_at.is_not(None)).order_by(User.id.asc())
+    if limit:
+        stmt = stmt.limit(limit)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())

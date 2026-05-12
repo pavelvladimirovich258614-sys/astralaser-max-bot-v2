@@ -4,12 +4,75 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10.5.1 broadcast draft/preview bugfix live-test passed, ready to commit/push
+**Статус проекта:** F10.5.2a broadcast plan service implemented and verified, committed and pushed
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (F10.5.1 bugfix live-test passed; F10.5.2 not started)
-**Последний коммит:** `feat(F10.5.1): add admin broadcast draft and preview` (pushed to origin/main)
-**Тесты:** 275 passed
+**Текущая фича:** F10 — Админ-панель (F10.5.2a service-level broadcast plan done; F10.5.2b not started)
+**Последний коммит:** `feat(F10.5.2a): add broadcast plan service` (pushed to origin/main)
+**Тесты:** 282 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-12 (F10.5.2a implemented + verified)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10.5.2a — Broadcast plan service (service-level preparation only)
+**Status:** implemented, verified, committed, pushed
+
+### What was done
+
+- `src/config.py`: добавлены 3 broadcast-настройки с безопасными дефолтами:
+  - `broadcast_enabled: bool = False`
+  - `broadcast_max_recipients: int = 0`
+  - `broadcast_throttle_ms: int = 500`
+- `.env.example`: добавлены те же 3 переменные с комментарием о безопасности.
+- `src/db/crud/user.py`: добавлена `get_broadcast_recipients(session, limit)` — только User с `consent_at IS NOT NULL`, сортировка по `id ASC`, limit если задан и > 0.
+- `src/services/admin_service.py`:
+  - Добавлены `BroadcastRecipientDTO` и `BroadcastPlanDTO`.
+  - Добавлена `prepare_broadcast_plan(session, text)` — подготавливает план рассылки без фактической отправки.
+  - **Safety:** `BROADCAST_ENABLED=false` безопасен, но recipients всё равно считаются (с учётом `max_recipients`), чтобы админ видел потенциальное количество получателей.
+  - `total_recipients == len(recipients)`.
+  - Сервис не импортирует `MAXClient`, не отправляет сообщения, не делает `sleep`.
+- `tests/test_admin_service.py`: добавлено/обновлено 7 тестов broadcast plan:
+  - `test_get_broadcast_recipients_only_consented_users`
+  - `test_get_broadcast_recipients_respects_limit`
+  - `test_prepare_broadcast_plan_disabled_by_default`
+  - `test_prepare_broadcast_plan_disabled_still_counts_recipients`
+  - `test_prepare_broadcast_plan_respects_max_recipients`
+  - `test_prepare_broadcast_plan_uses_throttle_ms`
+  - `test_prepare_broadcast_plan_does_not_send_messages`
+
+### Safety checklist
+
+- `BROADCAST_ENABLED=false` по умолчанию ✅
+- `BROADCAST_MAX_RECIPIENTS=0` по умолчанию (без лимита при включении) ✅
+- `BROADCAST_THROTTLE_MS=500` по умолчанию ✅
+- disabled mode всё равно считает potential recipients с учётом max_recipients ✅
+- никакой реальной отправки в сервисе ✅
+- `MAXClient` не импортирован в `admin_service.py` ✅
+- `admin_broadcast_send` в `handlers/admin.py` остался safe placeholder ✅
+
+### Evidence
+
+- pytest: 282 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 36 source files ✅
+- init.ps1: Architecture OK, === READY === ✅
+- Live-test MAX: **not applicable** — handler не подключён к сервису, UI/runtime не изменён ✅
+
+### Scope guard
+
+- `src/bot/handlers/admin.py` — не изменён ✅
+- `src/bot/router.py` — не изменён ✅
+- `src/bot/keyboards.py` — не изменён ✅
+- F10.5.2b (подключение handler к broadcast plan + реальная отправка) — не начата ✅
+- Массовая отправка пользователям — не добавлена ✅
+- БД-модели, миграции, seed, `.env`, `docs/TZ.md` — не изменены ✅
+- `feature_list.json` — не изменён (F10 остаётся `in_progress`) ✅
+
+### Next best action
+
+- F10.5.2b — подключить `admin_broadcast_send` к `prepare_broadcast_plan` с сохранением `BROADCAST_ENABLED=false` safety. Только по explicit approve.
 
 ---
 

@@ -515,3 +515,142 @@ async def test_create_product_with_photos_requires_at_least_one_photo(db_session
         photo_urls=[],
     )
     assert product is None
+
+
+# ---------------------------------------------------------------------------
+# Broadcast plan (F10.5.2a)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_broadcast_recipients_only_consented_users(db_session):
+    """get_broadcast_recipients возвращает только пользователей с consent_at."""
+    from src.db.crud import user as user_crud
+
+    consented = User(max_user_id="c1", full_name="Consented")
+    db_session.add(consented)
+    await db_session.flush()
+    await user_crud.update_consent(db_session, consented)
+
+    unconsented = User(max_user_id="u1", full_name="Unconsented")
+    db_session.add(unconsented)
+    await db_session.commit()
+
+    recipients = await user_crud.get_broadcast_recipients(db_session)
+    ids = {u.max_user_id for u in recipients}
+    assert "c1" in ids
+    assert "u1" not in ids
+
+
+@pytest.mark.asyncio
+async def test_get_broadcast_recipients_respects_limit(db_session):
+    """get_broadcast_recipients с limit ограничивает количество."""
+    from src.db.crud import user as user_crud
+
+    for i in range(5):
+        user = User(max_user_id=f"u{i}", full_name=f"User{i}")
+        db_session.add(user)
+        await db_session.flush()
+        await user_crud.update_consent(db_session, user)
+
+    await db_session.commit()
+
+    recipients = await user_crud.get_broadcast_recipients(db_session, limit=2)
+    assert len(recipients) == 2
+
+
+@pytest.mark.asyncio
+async def test_prepare_broadcast_plan_disabled_by_default(monkeypatch, db_session):
+    """По умолчанию BROADCAST_ENABLED=false — план disabled, но recipients считаются."""
+    from src.db.crud import user as user_crud
+
+    user = User(max_user_id="u1", full_name="User")
+    db_session.add(user)
+    await db_session.flush()
+    await user_crud.update_consent(db_session, user)
+    await db_session.commit()
+
+    monkeypatch.setenv("BROADCAST_ENABLED", "false")
+    plan = await admin_service.prepare_broadcast_plan(db_session, "Hello")
+
+    assert plan.enabled is False
+    assert plan.reason == "disabled"
+    assert len(plan.recipients) == 1
+    assert plan.recipients[0].max_user_id == "u1"
+    assert plan.total_recipients == 1
+
+
+@pytest.mark.asyncio
+async def test_prepare_broadcast_plan_disabled_still_counts_recipients(monkeypatch, db_session):
+    """При BROADCAST_ENABLED=false recipients всё равно заполняются с учётом max_recipients."""
+    from src.db.crud import user as user_crud
+
+    for i in range(5):
+        user = User(max_user_id=f"u{i}", full_name=f"User{i}")
+        db_session.add(user)
+        await db_session.flush()
+        await user_crud.update_consent(db_session, user)
+
+    await db_session.commit()
+
+    monkeypatch.setenv("BROADCAST_ENABLED", "false")
+    monkeypatch.setenv("BROADCAST_MAX_RECIPIENTS", "3")
+    plan = await admin_service.prepare_broadcast_plan(db_session, "Hello")
+
+    assert plan.enabled is False
+    assert plan.reason == "disabled"
+    assert len(plan.recipients) == 3
+    assert plan.total_recipients == 3
+    assert plan.recipients[0].max_user_id == "u0"
+
+
+@pytest.mark.asyncio
+async def test_prepare_broadcast_plan_respects_max_recipients(monkeypatch, db_session):
+    """BROADCAST_MAX_RECIPIENTS ограничивает список получателей."""
+    from src.db.crud import user as user_crud
+
+    for i in range(5):
+        user = User(max_user_id=f"u{i}", full_name=f"User{i}")
+        db_session.add(user)
+        await db_session.flush()
+        await user_crud.update_consent(db_session, user)
+
+    await db_session.commit()
+
+    monkeypatch.setenv("BROADCAST_ENABLED", "true")
+    monkeypatch.setenv("BROADCAST_MAX_RECIPIENTS", "2")
+    plan = await admin_service.prepare_broadcast_plan(db_session, "Hello")
+
+    assert plan.enabled is True
+    assert len(plan.recipients) == 2
+    assert plan.total_recipients == 2
+
+
+@pytest.mark.asyncio
+async def test_prepare_broadcast_plan_uses_throttle_ms(monkeypatch, db_session):
+    """BROADCAST_THROTTLE_MS передаётся в план."""
+    monkeypatch.setenv("BROADCAST_ENABLED", "false")
+    monkeypatch.setenv("BROADCAST_THROTTLE_MS", "750")
+    plan = await admin_service.prepare_broadcast_plan(db_session, "Hello")
+
+    assert plan.throttle_ms == 750
+
+
+@pytest.mark.asyncio
+async def test_prepare_broadcast_plan_does_not_send_messages(monkeypatch, db_session):
+    """prepare_broadcast_plan не отправляет сообщения (нет сетевых вызовов)."""
+    from src.db.crud import user as user_crud
+
+    user = User(max_user_id="u1", full_name="User")
+    db_session.add(user)
+    await db_session.flush()
+    await user_crud.update_consent(db_session, user)
+    await db_session.commit()
+
+    monkeypatch.setenv("BROADCAST_ENABLED", "true")
+    plan = await admin_service.prepare_broadcast_plan(db_session, "Hello")
+
+    assert plan.enabled is True
+    assert len(plan.recipients) == 1
+    assert plan.recipients[0].max_user_id == "u1"
+    # Если бы были сетевые вызовы, тест упал бы из-за отсутствия mock — но их нет

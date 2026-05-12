@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.config import get_settings
 from src.db.crud import category as category_crud
 from src.db.crud import order as order_crud
 from src.db.crud import product as product_crud
+from src.db.crud import user as user_crud
 from src.db.models import Category, Order, Product, ProductPhoto
 
 VALID_STATUSES = {"pending", "confirmed", "completed", "cancelled"}
@@ -168,3 +172,76 @@ async def create_product_with_photos(
     await product_photo_crud.create_photos(session, product.id, photo_urls)
     await session.commit()
     return product
+
+
+# ---------------------------------------------------------------------------
+# Broadcast plan (F10.5.2a)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class BroadcastRecipientDTO:
+    user_id: int
+    max_user_id: str
+    username: str | None
+    full_name: str | None
+
+
+@dataclass
+class BroadcastPlanDTO:
+    enabled: bool
+    text: str
+    recipients: list[BroadcastRecipientDTO]
+    total_recipients: int
+    throttle_ms: int
+    max_recipients: int
+    reason: str | None = None
+
+
+async def prepare_broadcast_plan(session: AsyncSession, text: str) -> BroadcastPlanDTO:
+    """Подготовить план рассылки без фактической отправки.
+
+    Возвращает потенциальных получателей даже когда BROADCAST_ENABLED=false,
+    чтобы админ видел количество до активации.
+    """
+    settings = get_settings()
+    enabled = settings.broadcast_enabled
+    max_recipients = settings.broadcast_max_recipients
+    throttle_ms = settings.broadcast_throttle_ms
+
+    all_users = await user_crud.get_broadcast_recipients(session)
+
+    users = all_users
+    if max_recipients > 0:
+        users = users[:max_recipients]
+
+    recipients = [
+        BroadcastRecipientDTO(
+            user_id=user.id,
+            max_user_id=user.max_user_id,
+            username=user.username,
+            full_name=user.full_name,
+        )
+        for user in users
+    ]
+
+    if not enabled:
+        return BroadcastPlanDTO(
+            enabled=False,
+            text=text,
+            recipients=recipients,
+            total_recipients=len(recipients),
+            throttle_ms=throttle_ms,
+            max_recipients=max_recipients,
+            reason="disabled",
+        )
+
+    return BroadcastPlanDTO(
+        enabled=True,
+        text=text,
+        recipients=recipients,
+        total_recipients=len(recipients),
+        throttle_ms=throttle_ms,
+        max_recipients=max_recipients,
+        reason=None,
+    )

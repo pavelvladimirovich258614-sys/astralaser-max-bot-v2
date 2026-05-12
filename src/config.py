@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     http_timeout: int = 30
     working_hours: str = "пн–сб 10:00–18:00 МСК"
+    broadcast_enabled: bool = False
+    broadcast_max_recipients: int = 0
+    broadcast_throttle_ms: int = 500
 
     @property
     def admin_ids_list(self) -> list[str]:
