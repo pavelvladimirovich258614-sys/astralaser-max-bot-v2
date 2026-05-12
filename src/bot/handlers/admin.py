@@ -479,10 +479,17 @@ async def admin_broadcast_send(
         # enabled=True — выполняем отправку
         sent_count = 0
         failed_count = 0
+        skipped_count = 0
         for recipient in plan.recipients:
+            if not recipient.max_chat_id:
+                skipped_count += 1
+                continue
             try:
-                await client.send_message(recipient.max_user_id, plan.text)
-                sent_count += 1
+                result = await client.send_message(recipient.max_chat_id, plan.text)
+                if result:
+                    sent_count += 1
+                else:
+                    failed_count += 1
             except Exception:
                 failed_count += 1
             if plan.throttle_ms > 0:
@@ -490,7 +497,7 @@ async def admin_broadcast_send(
 
         await fsm_service.clear_state(session, user_obj.id)
 
-    text = f"📤 Рассылка завершена: отправлено {sent_count}, ошибок {failed_count}."
+    text = f"📤 Рассылка завершена:\nотправлено {sent_count},\nошибок {failed_count},\nпропущено {skipped_count}."
     if message_id:
         await client.edit_message(chat_id, message_id, text, reply_markup=kb.admin_back_keyboard())
     else:

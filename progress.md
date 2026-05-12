@@ -4,12 +4,77 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10.5.2d.2 router capture max_chat_id implemented and verified, committed and pushed. F10.5.2d.3/d.4 not started.
+**Статус проекта:** F10.5.2d.3-d.4 broadcast max_chat_id + correct counting implemented and test-verified. Controlled live-test pending.
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (F10.5.2d.2 done; F10.5.2d.3/d.4 not started)
-**Последний коммит:** `feat(F10.5.2d.2): capture user chat id in router` (pushed to origin/main)
-**Тесты:** 295 passed
+**Текущая фича:** F10 — Админ-панель (F10.5.2d.3-d.4 done; F10.5.2d.5 controlled live-test pending)
+**Последний коммит:** `fix(F10.5.2d): use chat id for broadcast sending` (pending commit/push)
+**Тесты:** 300 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-12 (F10.5.2d.3-d.4 broadcast max_chat_id + correct counting implemented + test-verified)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10.5.2d.3-d.4 — BroadcastRecipientDTO.max_chat_id + correct broadcast loop counting
+**Status:** implemented, verified by tests, pending commit/push
+
+### Context
+
+F10.5.2c controlled live-test failed because:
+- `User.max_user_id` is MAX user_id, but MAX API requires dialog `chat_id`.
+- `MAXClient.send_message()` catches 4xx internally and returns `{}` (no exception).
+- Handler's `try/except` never triggered → `sent_count` incremented falsely.
+- F10.5.2d.1/d.2 added and captured `User.max_chat_id`. Now F10.5.2d.3-d.4 use it.
+
+### What was done
+
+- `src/services/admin_service.py`:
+  - `BroadcastRecipientDTO` now includes `max_chat_id: str | None`.
+  - `prepare_broadcast_plan()` fills `max_chat_id=user.max_chat_id` for each recipient.
+  - Service still does not import `MAXClient`, send messages, or sleep.
+- `src/bot/handlers/admin.py`:
+  - Broadcast loop sends to `recipient.max_chat_id` instead of `recipient.max_user_id`.
+  - Recipients without `max_chat_id` are skipped (`skipped_count += 1; continue`).
+  - `result = await client.send_message(...)` is checked: truthy dict → `sent_count += 1`, `{}` or `None` → `failed_count += 1`.
+  - Exceptions → `failed_count += 1`.
+  - Admin summary now shows: "отправлено N, ошибок M, пропущено K."
+- `tests/test_admin_service.py`:
+  - 4 existing tests updated to assert `max_chat_id is None`.
+  - `test_prepare_broadcast_plan_includes_max_chat_id` — verifies DTO gets `"chat_123"`.
+  - `test_prepare_broadcast_plan_includes_user_without_max_chat_id` — verifies `None` stays in list.
+- `tests/test_admin.py`:
+  - `RecordingClient.send_message` now returns `{"message_id": "test"}` (truthy dict).
+  - Existing broadcast tests updated for `max_chat_id` recipients and `пропущено 0`.
+  - `test_admin_broadcast_send_counts_empty_result_as_failed` — `{}` return counts as failed.
+  - `test_admin_broadcast_send_skips_recipient_without_max_chat_id` — 1 sent, 1 skipped.
+  - `test_admin_broadcast_send_exception_one_recipient_continues` — exception on one recipient does not break others.
+
+### Evidence
+
+- pytest: 300 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 36 source files ✅
+- init.ps1: Architecture OK, === READY === ✅
+
+### Scope guard
+
+- `src/bot/router.py` — not changed ✅
+- `src/bot/webhook.py` — not changed (unrelated mypy diff reverted) ✅
+- `src/db/models.py`, `src/db/crud/user.py`, `src/services/user_service.py`, `alembic` — not changed ✅
+- `src/bot/max_client.py` — not changed ✅
+- `.env`, `.env.example`, `src/config.py` — not changed ✅
+- `feature_list.json` — not changed (F10 remains `in_progress`) ✅
+- `progress.md` — updated in this step ✅
+- No live-test, no uvicorn run ✅
+- `BROADCAST_ENABLED` not enabled, no real broadcast ✅
+
+### Next best action
+
+- **F10.5.2d.5 — Controlled live-test**:
+  1. `BROADCAST_ENABLED=true` + `BROADCAST_MAX_RECIPIENTS=1` → verify first test account receives message.
+  2. `BROADCAST_MAX_RECIPIENTS=2` → verify both test accounts receive messages.
+  3. Verify admin summary shows honest counts (sent / failed / skipped).
 
 ---
 

@@ -22,6 +22,7 @@ class RecordingClient:
 
     async def send_message(self, chat_id, text, reply_markup=None, photo_url=None, photo=None):
         self.calls.append({"method": "send_message", "chat_id": chat_id, "text": text, "reply_markup": reply_markup})
+        return {"message_id": "test"}
 
 
 @pytest.fixture(autouse=True)
@@ -1127,9 +1128,9 @@ async def test_admin_broadcast_send_enabled_best_effort(monkeypatch, db_session)
     await db_session.flush()
     await fsm_service.set_state(db_session, admin.id, fsm_service.ADMIN_BROADCAST_TEXT, {"broadcast_text": "Hello"})
 
-    # Создать consented получателей
+    # Создать consented получателей с max_chat_id
     for i in range(3):
-        user = User(max_user_id=f"u{i}", full_name=f"User{i}")
+        user = User(max_user_id=f"u{i}", full_name=f"User{i}", max_chat_id=f"chat{i}")
         db_session.add(user)
         await db_session.flush()
         await user_crud.update_consent(db_session, user)
@@ -1145,12 +1146,15 @@ async def test_admin_broadcast_send_enabled_best_effort(monkeypatch, db_session)
 
     for c in send_calls:
         assert c["text"] == "Hello"
+        # Отправка должна идти на max_chat_id, а не max_user_id
+        assert c["chat_id"].startswith("chat")
 
     edit_calls = [c for c in client.calls if c["method"] == "edit_message"]
     assert len(edit_calls) == 1
     assert "Рассылка завершена" in edit_calls[0]["text"]
     assert "отправлено 3" in edit_calls[0]["text"]
     assert "ошибок 0" in edit_calls[0]["text"]
+    assert "пропущено 0" in edit_calls[0]["text"]
 
     state, data = await fsm_service.get_state(db_session, admin.id)
     assert state is None
@@ -1171,7 +1175,7 @@ async def test_admin_broadcast_send_respects_max_recipients(monkeypatch, db_sess
     await fsm_service.set_state(db_session, admin.id, fsm_service.ADMIN_BROADCAST_TEXT, {"broadcast_text": "Hello"})
 
     for i in range(2):
-        user = User(max_user_id=f"u{i}", full_name=f"User{i}")
+        user = User(max_user_id=f"u{i}", full_name=f"User{i}", max_chat_id=f"chat{i}")
         db_session.add(user)
         await db_session.flush()
         await user_crud.update_consent(db_session, user)
@@ -1184,10 +1188,12 @@ async def test_admin_broadcast_send_respects_max_recipients(monkeypatch, db_sess
     send_calls = [c for c in client.calls if c["method"] == "send_message"]
     assert len(send_calls) == 1
     assert send_calls[0]["text"] == "Hello"
+    assert send_calls[0]["chat_id"] == "chat0"
 
     edit_calls = [c for c in client.calls if c["method"] == "edit_message"]
     assert len(edit_calls) == 1
     assert "отправлено 1" in edit_calls[0]["text"]
+    assert "пропущено 0" in edit_calls[0]["text"]
 
     state, data = await fsm_service.get_state(db_session, admin.id)
     assert state is None
@@ -1212,3 +1218,130 @@ async def test_admin_broadcast_denied_for_regular_user(monkeypatch):
     await admin_handler.admin_broadcast_send(client, chat_id=1, user_id="99999", message_id="msg_1")
     assert len(client.calls) == 1
     assert "Команда не найдена" in client.calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_send_counts_empty_result_as_failed(monkeypatch, db_session):
+    """send_message returning {} counts as failed, not sent."""
+    from src.db.crud import user as user_crud
+
+    monkeypatch.setenv("BROADCAST_ENABLED", "true")
+    monkeypatch.setenv("BROADCAST_THROTTLE_MS", "0")
+
+    admin = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(admin)
+    await db_session.flush()
+    await fsm_service.set_state(db_session, admin.id, fsm_service.ADMIN_BROADCAST_TEXT, {"broadcast_text": "Hello"})
+
+    user = User(max_user_id="u0", full_name="User", max_chat_id="chat0")
+    db_session.add(user)
+    await db_session.flush()
+    await user_crud.update_consent(db_session, user)
+
+    await db_session.commit()
+
+    class FailingClient:
+        def __init__(self):
+            self.calls = []
+
+        async def edit_message(self, chat_id, message_id, text, reply_markup=None, photo_url=None, photo=None):
+            self.calls.append({"method": "edit_message", "chat_id": chat_id, "text": text})
+
+        async def send_message(self, chat_id, text, reply_markup=None, photo_url=None, photo=None):
+            self.calls.append({"method": "send_message", "chat_id": chat_id, "text": text})
+            return {}  # simulate 4xx failure
+
+    client = FailingClient()
+    await admin_handler.admin_broadcast_send(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    edit_calls = [c for c in client.calls if c["method"] == "edit_message"]
+    assert len(edit_calls) == 1
+    assert "отправлено 0" in edit_calls[0]["text"]
+    assert "ошибок 1" in edit_calls[0]["text"]
+    assert "пропущено 0" in edit_calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_send_skips_recipient_without_max_chat_id(monkeypatch, db_session):
+    """Recipient без max_chat_id не отправляется, считается skipped."""
+    from src.db.crud import user as user_crud
+
+    monkeypatch.setenv("BROADCAST_ENABLED", "true")
+    monkeypatch.setenv("BROADCAST_THROTTLE_MS", "0")
+
+    admin = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(admin)
+    await db_session.flush()
+    await fsm_service.set_state(db_session, admin.id, fsm_service.ADMIN_BROADCAST_TEXT, {"broadcast_text": "Hello"})
+
+    # Один с chat_id, один без
+    user_with = User(max_user_id="u_with", full_name="With", max_chat_id="chat1")
+    user_without = User(max_user_id="u_without", full_name="Without")
+    db_session.add_all([user_with, user_without])
+    await db_session.flush()
+    await user_crud.update_consent(db_session, user_with)
+    await user_crud.update_consent(db_session, user_without)
+
+    await db_session.commit()
+
+    client = RecordingClient()
+    await admin_handler.admin_broadcast_send(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    send_calls = [c for c in client.calls if c["method"] == "send_message"]
+    # Только один recipient отправлен (с chat_id); второй skipped
+    assert len(send_calls) == 1
+    assert send_calls[0]["chat_id"] == "chat1"
+
+    edit_calls = [c for c in client.calls if c["method"] == "edit_message"]
+    assert len(edit_calls) == 1
+    assert "отправлено 1" in edit_calls[0]["text"]
+    assert "ошибок 0" in edit_calls[0]["text"]
+    assert "пропущено 1" in edit_calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_send_exception_one_recipient_continues(monkeypatch, db_session):
+    """Exception у одного recipient не ломает остальных."""
+    from src.db.crud import user as user_crud
+
+    monkeypatch.setenv("BROADCAST_ENABLED", "true")
+    monkeypatch.setenv("BROADCAST_THROTTLE_MS", "0")
+
+    admin = User(max_user_id="4147438", full_name="Admin")
+    db_session.add(admin)
+    await db_session.flush()
+    await fsm_service.set_state(db_session, admin.id, fsm_service.ADMIN_BROADCAST_TEXT, {"broadcast_text": "Hello"})
+
+    for i in range(2):
+        user = User(max_user_id=f"u{i}", full_name=f"User{i}", max_chat_id=f"chat{i}")
+        db_session.add(user)
+        await db_session.flush()
+        await user_crud.update_consent(db_session, user)
+
+    await db_session.commit()
+
+    class PartialFailingClient:
+        def __init__(self):
+            self.calls = []
+            self._should_fail = False
+
+        async def edit_message(self, chat_id, message_id, text, reply_markup=None, photo_url=None, photo=None):
+            self.calls.append({"method": "edit_message", "chat_id": chat_id, "text": text})
+
+        async def send_message(self, chat_id, text, reply_markup=None, photo_url=None, photo=None):
+            self.calls.append({"method": "send_message", "chat_id": chat_id, "text": text})
+            if chat_id == "chat0":
+                raise RuntimeError("boom")
+            return {"message_id": "ok"}
+
+    client = PartialFailingClient()
+    await admin_handler.admin_broadcast_send(client, chat_id=1, user_id="4147438", message_id="msg_1")
+
+    send_calls = [c for c in client.calls if c["method"] == "send_message"]
+    assert len(send_calls) == 2
+
+    edit_calls = [c for c in client.calls if c["method"] == "edit_message"]
+    assert len(edit_calls) == 1
+    assert "отправлено 1" in edit_calls[0]["text"]
+    assert "ошибок 1" in edit_calls[0]["text"]
+    assert "пропущено 0" in edit_calls[0]["text"]

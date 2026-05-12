@@ -577,6 +577,7 @@ async def test_prepare_broadcast_plan_disabled_by_default(monkeypatch, db_sessio
     assert plan.reason == "disabled"
     assert len(plan.recipients) == 1
     assert plan.recipients[0].max_user_id == "u1"
+    assert plan.recipients[0].max_chat_id is None
     assert plan.total_recipients == 1
 
 
@@ -602,6 +603,7 @@ async def test_prepare_broadcast_plan_disabled_still_counts_recipients(monkeypat
     assert len(plan.recipients) == 3
     assert plan.total_recipients == 3
     assert plan.recipients[0].max_user_id == "u0"
+    assert plan.recipients[0].max_chat_id is None
 
 
 @pytest.mark.asyncio
@@ -624,6 +626,7 @@ async def test_prepare_broadcast_plan_respects_max_recipients(monkeypatch, db_se
     assert plan.enabled is True
     assert len(plan.recipients) == 2
     assert plan.total_recipients == 2
+    assert plan.recipients[0].max_chat_id is None
 
 
 @pytest.mark.asyncio
@@ -653,4 +656,47 @@ async def test_prepare_broadcast_plan_does_not_send_messages(monkeypatch, db_ses
     assert plan.enabled is True
     assert len(plan.recipients) == 1
     assert plan.recipients[0].max_user_id == "u1"
+    assert plan.recipients[0].max_chat_id is None
     # Если бы были сетевые вызовы, тест упал бы из-за отсутствия mock — но их нет
+
+
+@pytest.mark.asyncio
+async def test_prepare_broadcast_plan_includes_max_chat_id(monkeypatch, db_session):
+    """prepare_broadcast_plan передаёт max_chat_id из User в BroadcastRecipientDTO."""
+    from src.db.crud import user as user_crud
+
+    user = User(max_user_id="u_chat", full_name="User", max_chat_id="chat_123")
+    db_session.add(user)
+    await db_session.flush()
+    await user_crud.update_consent(db_session, user)
+    await db_session.commit()
+
+    monkeypatch.setenv("BROADCAST_ENABLED", "true")
+    plan = await admin_service.prepare_broadcast_plan(db_session, "Hello")
+
+    assert len(plan.recipients) == 1
+    assert plan.recipients[0].max_chat_id == "chat_123"
+
+
+@pytest.mark.asyncio
+async def test_prepare_broadcast_plan_includes_user_without_max_chat_id(monkeypatch, db_session):
+    """Recipients без max_chat_id остаются в списке (для skipped_count в handler)."""
+    from src.db.crud import user as user_crud
+
+    user_with = User(max_user_id="u1", full_name="A", max_chat_id="chat1")
+    user_without = User(max_user_id="u2", full_name="B")
+    db_session.add_all([user_with, user_without])
+    await db_session.flush()
+    await user_crud.update_consent(db_session, user_with)
+    await user_crud.update_consent(db_session, user_without)
+    await db_session.commit()
+
+    monkeypatch.setenv("BROADCAST_ENABLED", "true")
+    plan = await admin_service.prepare_broadcast_plan(db_session, "Hello")
+
+    assert len(plan.recipients) == 2
+    ids = {r.max_user_id for r in plan.recipients}
+    assert ids == {"u1", "u2"}
+    chat_ids = {r.max_chat_id for r in plan.recipients}
+    assert "chat1" in chat_ids
+    assert None in chat_ids

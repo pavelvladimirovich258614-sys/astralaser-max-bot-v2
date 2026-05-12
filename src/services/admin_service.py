@@ -183,6 +183,7 @@ async def create_product_with_photos(
 class BroadcastRecipientDTO:
     user_id: int
     max_user_id: str
+    max_chat_id: str | None
     username: str | None
     full_name: str | None
 
@@ -219,6 +220,7 @@ async def prepare_broadcast_plan(session: AsyncSession, text: str) -> BroadcastP
         BroadcastRecipientDTO(
             user_id=user.id,
             max_user_id=user.max_user_id,
+            max_chat_id=user.max_chat_id,
             username=user.username,
             full_name=user.full_name,
         )
