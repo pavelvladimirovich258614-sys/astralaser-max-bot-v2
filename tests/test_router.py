@@ -9,6 +9,7 @@ from src.bot import router as router_module
 from src.bot.handlers import cart as cart_handler
 from src.bot.handlers import catalog as catalog_handler
 from src.bot.handlers import order as order_handler
+from src.bot.handlers import start as start_handler
 from src.bot.router import UpdateRouter
 from src.db.models import Base, CartItem, Product, User
 from src.services import catalog_service, fsm_service
@@ -101,6 +102,20 @@ async def override_router_session_maker(monkeypatch, async_engine):
 
     test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
     monkeypatch.setattr(router_module, "async_session_maker", test_session_maker)
+
+    yield
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest.fixture(autouse=True)
+async def override_start_session_maker(monkeypatch, async_engine):
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(start_handler, "async_session_maker", test_session_maker)
 
     yield
 
@@ -886,3 +901,65 @@ async def test_router_message_in_broadcast_state_routes_to_admin_handler(router,
     await r.process(_make_message_payload("Hello broadcast", user_id="900"))
     assert any(c.get("method") == "send_message" for c in client.calls)
     assert any("Предпросмотр рассылки" in c.get("text", "") for c in client.calls)
+
+
+# ---------------------------------------------------------------------------
+# Router chat_id capture (F10.5.2d.2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_router_message_created_captures_max_chat_id(router, async_engine):
+    """message_created передаёт recipient.chat_id как max_chat_id в get_or_create_user."""
+    r, client = router
+    await r.process(_make_message_payload("/start", user_id="msg_user", chat_id="msg_chat"))
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        from sqlalchemy import select
+
+        from src.db.models import User
+
+        user = await session.scalar(select(User).where(User.max_user_id == "msg_user"))
+        assert user is not None
+        assert user.max_chat_id == "msg_chat"
+
+
+@pytest.mark.asyncio
+async def test_router_callback_captures_max_chat_id(router, async_engine):
+    """message_callback передаёт message.recipient.chat_id как max_chat_id."""
+    r, client = router
+    await r.process(_make_callback_payload("catalog", user_id="cb_user"))
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        from sqlalchemy import select
+
+        from src.db.models import User
+
+        user = await session.scalar(select(User).where(User.max_user_id == "cb_user"))
+        assert user is not None
+        assert user.max_chat_id == "456"
+
+
+@pytest.mark.asyncio
+async def test_router_bot_started_captures_max_chat_id(router, async_engine):
+    """bot_started передаёт payload.chat_id как max_chat_id."""
+    r, client = router
+    payload = {
+        "update_type": "bot_started",
+        "chat_id": "bot_chat_99",
+        "user_id": "bot_user_99",
+        "user": {"user_id": "bot_user_99", "name": "Test"},
+    }
+    await r.process(payload)
+
+    test_session_maker = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with test_session_maker() as session:
+        from sqlalchemy import select
+
+        from src.db.models import User
+
+        user = await session.scalar(select(User).where(User.max_user_id == "bot_user_99"))
+        assert user is not None
+        assert user.max_chat_id == "bot_chat_99"

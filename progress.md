@@ -4,12 +4,62 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10.5.2d.1 data-layer max_chat_id implemented and verified, committed and pushed. F10.5.2d.2 not started.
+**Статус проекта:** F10.5.2d.2 router capture max_chat_id implemented and verified, committed and pushed. F10.5.2d.3/d.4 not started.
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (F10.5.2d.1 done; F10.5.2d.2 not started)
-**Последний коммит:** `feat(F10.5.2d.1): add user max chat id` (pushed to origin/main)
-**Тесты:** 292 passed
+**Текущая фича:** F10 — Админ-панель (F10.5.2d.2 done; F10.5.2d.3/d.4 not started)
+**Последний коммит:** `feat(F10.5.2d.2): capture user chat id in router` (pushed to origin/main)
+**Тесты:** 295 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-12 (F10.5.2d.2 router capture max_chat_id implemented + verified + committed + pushed)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10.5.2d.2 — Router capture dialog chat_id into User.max_chat_id
+**Status:** implemented, verified, committed, pushed
+
+### Context
+
+F10.5.2c controlled live-test failed with critical root cause:
+- `User.max_user_id` is MAX user_id, but MAX API `POST /messages?chat_id=...` requires dialog `chat_id`.
+- Router already extracted dialog `chat_id` from webhook payload (`recipient.chat_id` / `payload.chat_id`), but never persisted it.
+- F10.5.2d.1 added `User.max_chat_id` data-layer support; F10.5.2d.2 wires router to persist it on every inbound event.
+
+### What was done
+
+- `src/bot/router.py`:
+  - `_handle_message` (message_created): `get_or_create_user(..., max_chat_id=str(chat_id))`.
+  - `_handle_callback` (message_callback): added `get_or_create_user(..., max_chat_id=str(chat_id))` after dedup, before routing.
+  - `_handle_bot_started` (bot_started): added `get_or_create_user(..., max_chat_id=str(chat_id))` before `handle_start`.
+- `tests/test_router.py`:
+  - Added `override_start_session_maker` fixture for in-memory DB wiring.
+  - `test_router_message_created_captures_max_chat_id` — asserts `User.max_chat_id == "msg_chat"` after `/start` message.
+  - `test_router_callback_captures_max_chat_id` — asserts `User.max_chat_id == "456"` after `catalog` callback.
+  - `test_router_bot_started_captures_max_chat_id` — asserts `User.max_chat_id == "bot_chat_99"` after `bot_started`.
+
+### Evidence
+
+- pytest: 295 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 36 source files ✅
+- init.ps1: Architecture OK, === READY === ✅
+
+### Scope guard
+
+- `src/bot/handlers/admin.py` — not changed ✅
+- `src/services/admin_service.py` — not changed ✅
+- `src/bot/max_client.py` — not changed ✅
+- `src/db/models.py`, `src/db/crud/user.py`, `src/services/user_service.py`, `alembic` — not changed in this step ✅
+- Broadcast loop / send counting — not changed ✅
+- No live-test, no uvicorn run ✅
+- `BROADCAST_ENABLED` not enabled, no real broadcast ✅
+- `feature_list.json` — not changed (F10 remains `in_progress`) ✅
+
+### Next best action
+
+- F10.5.2d.3 — Update `BroadcastRecipientDTO` and `prepare_broadcast_plan` in `admin_service.py` to include `max_chat_id`.
+- F10.5.2d.4 — Update broadcast loop in `admin.py` to send to `recipient.max_chat_id` and correctly count failures when `send_message` returns `{}`.
 
 ---
 

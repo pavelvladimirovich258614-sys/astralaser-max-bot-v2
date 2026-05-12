@@ -54,7 +54,7 @@ class UpdateRouter:
 
         # Проверить FSM-состояние перед обычными командами
         async with async_session_maker() as session:
-            user_obj = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+            user_obj = await user_service.get_or_create_user(session, max_user_id=str(user_id), max_chat_id=str(chat_id))
             await session.commit()
             state, _ = await fsm_service.get_state(session, user_obj.id)
 
@@ -94,6 +94,12 @@ class UpdateRouter:
         if not chat_id or not user_id:
             logger.warning("bot_started missing user_id or chat_id")
             return
+
+        # Сохранить dialog chat_id для рассылки (F10.5.2d)
+        async with async_session_maker() as session:
+            await user_service.get_or_create_user(session, max_user_id=str(user_id), max_chat_id=str(chat_id))
+            await session.commit()
+
         await start_handler.handle_start(self.client, chat_id, user_id, user)
 
     async def _handle_callback(self, payload: dict[str, Any]) -> None:
@@ -123,6 +129,11 @@ class UpdateRouter:
             self._callback_dedup.popitem(last=False)
 
         self._callback_dedup[dedup_key] = now
+
+        # Сохранить dialog chat_id для рассылки (F10.5.2d)
+        async with async_session_maker() as session:
+            await user_service.get_or_create_user(session, max_user_id=str(user_id), max_chat_id=str(chat_id))
+            await session.commit()
 
         if data == "consent:accept":
             await start_handler.handle_consent_accept(self.client, chat_id, user_id, message_id)
