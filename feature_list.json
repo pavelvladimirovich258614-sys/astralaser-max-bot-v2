@@ -185,8 +185,10 @@
     {
       "id": "F11",
       "name": "Healthcheck + логирование",
-      "status": "in_progress",
+      "status": "completed",
       "started_at": "2026-05-13",
+      "completed_at": "2026-05-13",
+      "evidence": "pytest: 315 passed, ruff: exit 0, mypy: clean, init.ps1: READY, live-test: local/public /health returns {status, db, max_api, uptime}, structured logs: UTC ISO 8601 timestamp with trailing Z",
       "depends_on": ["F10"],
       "acceptance_criteria": [
         "GET /health возвращает {status, db, max_api, uptime}",

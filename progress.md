@@ -4,12 +4,60 @@
 
 ## Current Verified State
 
-**Статус проекта:** F11 — Healthcheck + логирование — `in_progress`.
-**Последняя закрытая фича:** F10 — Админ-панель
-**Текущая фича:** F11 — Healthcheck + логирование (F11.1 and F11.2 implemented + verified + live-tested; next: F11.3)
-**Последний коммит:** `feat(F11.3): add max api health check`
+**Статус проекта:** F11 — Healthcheck + логирование — `completed`. F12 — Деплой — `todo`, не начат.
+**Последняя закрытая фича:** F11 — Healthcheck + логирование
+**Текущая фича:** нет (ожидание explicit approve на F12 — Деплой)
+**Последний коммит:** `docs(F11): close healthcheck logging`
 **Тесты:** 315 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-13 (F11 — Final closure — completed)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F11 — Healthcheck + логирование
+**Status:** `completed`
+
+### Closure checklist (DoD)
+
+1. ✅ Код написан, импортируется без ошибок
+2. ✅ `python -m pytest -v` — 315 passed
+3. ✅ `python -m ruff check .` — exit 0
+4. ✅ `python -m mypy src/` — Success: no issues found in 38 source files
+5. ✅ `.​init.ps1` — Architecture OK, === READY ===
+6. ✅ Бот стартует и отвечает на тестовое сообщение в MAX (health + logs verified)
+7. ✅ В `progress.md` записан Session Record с evidence
+8. ✅ Изменения закоммичены и запушены
+
+### Staged sub-features completed
+
+- F11.1 — Extended /health: status + db + uptime ✅
+- F11.2 — Structured logging (UTC ISO 8601 timestamp ending Z) ✅
+- F11.3 — max_api health check (safe: timeout 5s, 30s cache, fallback "error") ✅
+- F11.4 — Final closure ✅
+
+### Final evidence
+
+- pytest: **315 passed** ✅
+- ruff: **exit 0** ✅
+- mypy: **Success: no issues found in 38 source files** ✅
+- init.ps1: **Architecture OK, === READY ===** ✅
+- Live-test local: `curl http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"..."}` ✅
+- Live-test public: `curl https://astralaser.ai-agent-paul.ru/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"..."}` ✅
+- Structured logs: `2026-05-13T10:56:42Z INFO src.bot.max_client - Webhook subscribed...` ✅
+
+### Scope guard
+
+- `.env` — not changed ✅
+- `.env.example` — not changed ✅
+- `src/config.py` — not changed ✅
+- `feature_list.json` — updated (F11 → completed) ✅
+- F12 — not started ✅
+
+### Next best action
+
+- **F12 — Деплой** — только по explicit approve. No code changes until then.
 
 ---
 
