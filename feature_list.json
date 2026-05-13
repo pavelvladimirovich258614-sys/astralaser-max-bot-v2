@@ -185,7 +185,8 @@
     {
       "id": "F11",
       "name": "Healthcheck + логирование",
-      "status": "todo",
+      "status": "in_progress",
+      "started_at": "2026-05-13",
       "depends_on": ["F10"],
       "acceptance_criteria": [
         "GET /health возвращает {status, db, max_api, uptime}",

@@ -4,12 +4,65 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10 — Админ-панель — `completed`. Все staged-подфичи закрыты.
+**Статус проекта:** F11 — Healthcheck + логирование — `in_progress`.
 **Последняя закрытая фича:** F10 — Админ-панель
-**Текущая фича:** F11 — Healthcheck + логирование (ожидает старта по explicit approve)
-**Последний коммит:** `docs(F10): close admin panel`
+**Текущая фича:** F11 — Healthcheck + логирование (F11.1 staged plan recorded; awaiting BUILD)
+**Последний коммит:** `docs(F11): record healthcheck logging staged plan`
 **Тесты:** 300 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-13 (F11 — Healthcheck + логирование — staged plan recorded, opened as in_progress)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F11 — Healthcheck + логирование
+**Status:** staged plan recorded, opened as `in_progress`, awaiting BUILD
+
+### Context
+
+F10 — Админ-панель — fully completed and pushed. Next feature in roadmap is F11.
+Staged plan prepared in PLAN mode; this session records the plan and opens F11.
+
+### Staged plan
+
+- **F11.1 — Extended /health: status + db + uptime**
+  - Расширить `GET /health` endpoint в `src/bot/webhook.py`.
+  - Добавить `src/services/health_service.py` с `check_db()` (SELECT 1) и `get_uptime()`.
+  - Response: `{"status": "ok", "db": "ok", "uptime": "..."}`.
+  - MAX API check отложен на F11.3, чтобы не добавлять сетевой вызов на каждый health.
+  - Тесты: обновить `tests/test_webhook.py`, добавить `tests/test_health_service.py`.
+  - Live-test: `curl /health` после реализации.
+
+- **F11.2 — Structured logging**
+  - Обновить `logging.basicConfig` в `src/main.py` — формат с ISO 8601 timestamp, level, module, message.
+  - Убедиться, что `LOG_LEVEL` из `.env` применяется ко всем логгерам.
+  - Тесты: формат логов, уважение `LOG_LEVEL`.
+  - Live-test: проверить формат логов при запуске uvicorn.
+
+- **F11.3 — max_api health check**
+  - Добавить `max_api` в `/health`.
+  - Безопасная реализация: без риска rate limit, с cache/timeout/fallback.
+  - Не делать сетевой вызов на каждый health без защиты.
+  - Тесты с mock `MAXClient`/`httpx`.
+
+- **F11.4 — Final closure**
+  - `progress.md` + `feature_list.json` → F11 completed.
+  - Проверки: pytest, ruff, mypy, init.ps1.
+  - Live-test evidence.
+  - Commit/push.
+
+### Scope guard
+
+- No code changes in this session ✅
+- `src/`, `tests/` not touched ✅
+- `.env`, `.env.example` not changed ✅
+- No uvicorn / Start-Process / hidden server ✅
+- F12 not started ✅
+
+### Next best action
+
+- **BUILD F11.1** — Extended /health endpoint with db check and uptime.
 
 ---
 
