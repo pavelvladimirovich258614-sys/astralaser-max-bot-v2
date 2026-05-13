@@ -11,7 +11,7 @@ from src.db.crud import category as category_crud
 from src.db.crud import order as order_crud
 from src.db.crud import product as product_crud
 from src.db.crud import user as user_crud
-from src.db.models import Category, Order, Product, ProductPhoto
+from src.db.models import Category, Order, Product, ProductPhoto, User
 
 VALID_STATUSES = {"pending", "confirmed", "completed", "cancelled"}
 
@@ -25,12 +25,6 @@ _STATUS_EMOJI = {
 
 async def get_recent_orders(session: AsyncSession, limit: int = 10) -> list[Order]:
     """Получить последние N заказов (все статусы), сортировка по убыванию created_at."""
-    # Используем list_all из order_crud или добавляем новый метод
-    # Пока order_crud не имеет list_all, используем get_by_user для всех?
-    # Нет, нужен list_all. Добавим в order_crud или сделаем запрос здесь.
-    # Лучше добавить в order_crud list_all, но запрещено менять CRUD?
-    # Нет, разрешено — admin_service использует CRUD.
-    # Давайте добавим list_all в order_crud.
     from sqlalchemy import select
 
     result = await session.execute(
@@ -68,6 +62,43 @@ def status_label(status: str) -> str:
         "cancelled": "Отменён",
     }
     return labels.get(status, status)
+
+
+# ---------------------------------------------------------------------------
+# Short stats
+# ---------------------------------------------------------------------------
+
+
+async def get_short_stats(session: AsyncSession) -> dict[str, int]:
+    """Короткая сводка по заказам, товарам и пользователям."""
+    order_total_result = await session.execute(select(func.count(Order.id)))
+    order_total = int(order_total_result.scalar_one() or 0)
+
+    order_counts: dict[str, int] = {}
+    for st in VALID_STATUSES:
+        r = await session.execute(select(func.count(Order.id)).where(Order.status == st))
+        order_counts[st] = int(r.scalar_one() or 0)
+
+    product_total_result = await session.execute(select(func.count(Product.id)))
+    product_total = int(product_total_result.scalar_one() or 0)
+
+    product_active_result = await session.execute(select(func.count(Product.id)).where(Product.is_active.is_(True)))
+    product_active = int(product_active_result.scalar_one() or 0)
+
+    # consented users = consent_at IS NOT NULL
+    user_result = await session.execute(select(func.count(User.id)).where(User.consent_at.is_not(None)))
+    user_consented = int(user_result.scalar_one() or 0)
+
+    return {
+        "order_total": order_total,
+        "order_pending": order_counts.get("pending", 0),
+        "order_confirmed": order_counts.get("confirmed", 0),
+        "order_completed": order_counts.get("completed", 0),
+        "product_total": product_total,
+        "product_active": product_active,
+        "product_hidden": product_total - product_active,
+        "user_consented": user_consented,
+    }
 
 
 # ---------------------------------------------------------------------------

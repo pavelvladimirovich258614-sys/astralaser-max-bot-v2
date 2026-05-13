@@ -700,3 +700,66 @@ async def test_prepare_broadcast_plan_includes_user_without_max_chat_id(monkeypa
     chat_ids = {r.max_chat_id for r in plan.recipients}
     assert "chat1" in chat_ids
     assert None in chat_ids
+
+
+# ---------------------------------------------------------------------------
+# Short stats
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_short_stats_empty_db(db_session):
+    """Пустая БД — все счётчики ноль."""
+    stats = await admin_service.get_short_stats(db_session)
+    assert stats["order_total"] == 0
+    assert stats["order_pending"] == 0
+    assert stats["product_total"] == 0
+    assert stats["product_active"] == 0
+    assert stats["product_hidden"] == 0
+    assert stats["user_consented"] == 0
+
+
+@pytest.mark.asyncio
+async def test_get_short_stats_with_data(db_session):
+    """get_short_stats возвращает корректные суммы для заказов, товаров и пользователей."""
+    from src.db.crud import user as user_crud
+
+    user = User(max_user_id="s1", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+    await user_crud.update_consent(db_session, user)
+
+    cat = Category(title="Test", slug="test", sort_order=1)
+    db_session.add(cat)
+    await db_session.flush()
+
+    product = Product(
+        category_id=cat.id,
+        title="P",
+        description="D",
+        price=100,
+        cover_url="url",
+        is_active=False,
+        sort_order=1,
+    )
+    db_session.add(product)
+    await db_session.flush()
+
+    order = Order(
+        user_id=user.id,
+        customer_name="A",
+        customer_phone="+7",
+        delivery_address="Addr",
+        total_amount=100,
+        status="pending",
+    )
+    db_session.add(order)
+    await db_session.commit()
+
+    stats = await admin_service.get_short_stats(db_session)
+    assert stats["order_total"] == 1
+    assert stats["order_pending"] == 1
+    assert stats["product_total"] == 1
+    assert stats["product_active"] == 0
+    assert stats["product_hidden"] == 1
+    assert stats["user_consented"] == 1

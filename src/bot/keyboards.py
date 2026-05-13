@@ -172,8 +172,8 @@ def admin_menu_keyboard() -> list[list[dict[str, Any]]]:
     """Клавиатура главного меню админ-панели."""
     return [
         [{"type": "callback", "text": "📦 Заказы", "payload": "admin:orders"}, {"type": "callback", "text": "📚 Товары", "payload": "admin:products"}],
-        [{"type": "callback", "text": "🏷 Категории", "payload": "admin:categories"}, {"type": "callback", "text": "📊 Статистика", "payload": "admin:stats"}],
-        [{"type": "callback", "text": "📤 Рассылка", "payload": "admin:broadcast"}, {"type": "callback", "text": "🚪 Выход", "payload": "admin:exit"}],
+        [{"type": "callback", "text": "📊 Статистика", "payload": "admin:stats"}, {"type": "callback", "text": "📤 Рассылка", "payload": "admin:broadcast"}],
+        [{"type": "callback", "text": "🚪 Выход", "payload": "admin:exit"}],
     ]
 
 

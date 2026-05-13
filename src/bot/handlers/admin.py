@@ -17,7 +17,6 @@ ADMIN_MENU_TEXT = """🛠 Админ-панель
 
 📦 Заказы — просмотр и обработка заказов
 📚 Товары — управление товарами
-🏷 Категории — управление категориями
 📊 Статистика — краткие показатели
 📤 Рассылка — сообщения пользователям
 🚪 Выход — вернуться в главное меню"""
@@ -382,10 +381,27 @@ async def admin_stats(
     user_id: int | str,
     message_id: str | None = None,
 ) -> None:
-    """📊 Статистика — placeholder."""
+    """📊 Статистика — краткая сводка."""
     if not _is_admin(user_id):
         return
-    text = "📊 Статистика — скоро."
+
+    async with async_session_maker() as session:
+        stats = await admin_service.get_short_stats(session)
+
+    lines = [
+        "📊 Статистика",
+        "",
+        f"📦 Заказы: {stats['order_total']} всего",
+        f"   • 🟡 {stats['order_pending']}  🔵 {stats['order_confirmed']}  ✅ {stats['order_completed']}",
+        "",
+        f"📚 Товары: {stats['product_total']} всего",
+        f"   • активных: {stats['product_active']}  скрытых: {stats['product_hidden']}",
+        "",
+        f"👤 Пользователи: {stats['user_consented']} с согласием",
+        "",
+        "[ 🔙 Назад ]",
+    ]
+    text = "\n".join(lines)
     if message_id:
         await client.edit_message(chat_id, message_id, text, reply_markup=kb.admin_back_keyboard())
     else:

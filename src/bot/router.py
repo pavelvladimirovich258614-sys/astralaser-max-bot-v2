@@ -249,8 +249,6 @@ class UpdateRouter:
                     await admin_handler.show_admin_product_detail(
                         self.client, chat_id, user_id, product_id, message_id
                     )
-            elif data == "admin:categories":
-                await admin_handler.admin_categories(self.client, chat_id, user_id, message_id)
             elif data == "admin:stats":
                 await admin_handler.admin_stats(self.client, chat_id, user_id, message_id)
             elif data == "admin:broadcast":

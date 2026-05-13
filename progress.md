@@ -7,13 +7,55 @@
 **Статус проекта:** F11 — Healthcheck + логирование — `in_progress`.
 **Последняя закрытая фича:** F10 — Админ-панель
 **Текущая фича:** F11 — Healthcheck + логирование (F11.1 and F11.2 implemented + verified + live-tested; next: F11.3)
-**Последний коммит:** `feat(F11.2): add structured logging`
-**Тесты:** 309 passed
+**Последний коммит:** `feat(admin): add short stats and remove categories menu`
+**Тесты:** 311 passed
 **Блокер:** нет
 
 ---
 
-## Session Record — 2026-05-13 (F11 — Healthcheck + логирование — staged plan recorded, opened as in_progress)
+## Session Record — 2026-05-13 (Admin cleanup + short stats — implemented + verified + committed + pushed)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** Admin cleanup + short stats (between F11.2 and F11.3)
+**Status:** implemented, verified, committed, pushed
+
+### Context
+
+Small admin cleanup patch before continuing F11.3. No feature status change.
+
+### What was done
+
+- `src/bot/keyboards.py` — removed 🏷 Категории button from `admin_menu_keyboard()`. Layout now 5 buttons: 📦 Заказы, 📚 Товары, 📊 Статистика, 📤 Рассылка, 🚪 Выход.
+- `src/bot/handlers/admin.py`:
+  - Removed `🏷 Категории — управление категориями` line from `ADMIN_MENU_TEXT`.
+  - Implemented real `admin_stats()` calling `admin_service.get_short_stats()`, renders compact summary with order/product/user counts.
+- `src/bot/router.py` — removed `admin:categories` routing branch.
+- `src/services/admin_service.py`:
+  - Added `get_short_stats()` — aggregates counts via `func.count()` for orders (total + per status), products (total/active/hidden), and consented users.
+  - Removed stale internal comments from `get_recent_orders()`.
+- `tests/test_admin.py` — updated `test_admin_menu_has_all_buttons` (5 buttons, no categories); updated skeleton test to assert real stats content.
+- `tests/test_admin_service.py` — added `test_get_short_stats_empty_db` and `test_get_short_stats_with_data`.
+- `src/bot/webhook.py` — kept `# type: ignore[type-arg]` on `receive_update` signature (required for mypy clean in strict mode).
+
+### Evidence
+
+- pytest: **311 passed** ✅
+- ruff: **exit 0** ✅
+- mypy: **Success: no issues found in 38 source files** ✅
+- init.ps1: **=== READY ===** ✅
+
+### Scope guard
+
+- F11.3 (max_api health check) — not started ✅
+- F12 (deploy) — not started ✅
+- `.env` — not changed ✅
+- `feature_list.json` — not changed (F11 remains `in_progress`) ✅
+
+### Next best action
+
+- **F11.3 — max_api health check** — add safe MAX API connectivity check to `/health` with cache/timeout/fallback. Only by explicit approve.
+
+---
 
 **Agent:** Kimi K2.6 (OpenCode)
 **Feature:** F11 — Healthcheck + логирование

@@ -116,15 +116,15 @@ async def test_admin_access_granted_for_admin(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_admin_menu_has_all_buttons():
-    """Клавиатура содержит все 6 кнопок с правильными payload."""
+    """Клавиатура содержит все 5 кнопок с правильными payload (no categories)."""
     kb = admin_menu_keyboard()
     payloads = [b["payload"] for row in kb for b in row]
     assert "admin:orders" in payloads
     assert "admin:products" in payloads
-    assert "admin:categories" in payloads
     assert "admin:stats" in payloads
     assert "admin:broadcast" in payloads
     assert "admin:exit" in payloads
+    assert "admin:categories" not in payloads
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +143,7 @@ async def test_admin_skeleton_callbacks_require_admin_access(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_admin_skeleton_callbacks_show_placeholders(monkeypatch):
-    """Админ видит placeholder-экраны для оставшихся skeleton callbacks."""
+    """Админ видит экраны для основных admin callbacks."""
     monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))
     client = RecordingClient()
 
@@ -151,11 +151,11 @@ async def test_admin_skeleton_callbacks_show_placeholders(monkeypatch):
     await admin_handler.admin_products(client, chat_id=1, user_id="4147438", message_id="msg_1")
     assert any("📚 Категории товаров пока не созданы" in c["text"] for c in client.calls)
 
-    await admin_handler.admin_categories(client, chat_id=1, user_id="4147438", message_id="msg_1")
-    assert any("🏷 Категории" in c["text"] for c in client.calls)
-
     await admin_handler.admin_stats(client, chat_id=1, user_id="4147438", message_id="msg_1")
     assert any("📊 Статистика" in c["text"] for c in client.calls)
+    assert any("Заказы:" in c["text"] for c in client.calls)
+    assert any("Товары:" in c["text"] for c in client.calls)
+    assert any("Пользователи:" in c["text"] for c in client.calls)
 
     await admin_handler.admin_broadcast(client, chat_id=1, user_id="4147438", message_id="msg_1")
     assert any("📤 Рассылка" in c["text"] for c in client.calls)
