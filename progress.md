@@ -7,9 +7,59 @@
 **Статус проекта:** F11 — Healthcheck + логирование — `in_progress`.
 **Последняя закрытая фича:** F10 — Админ-панель
 **Текущая фича:** F11 — Healthcheck + логирование (F11.1 and F11.2 implemented + verified + live-tested; next: F11.3)
-**Последний коммит:** `feat(order): add client order history`
-**Тесты:** 314 passed
+**Последний коммит:** `feat(F11.3): add max api health check`
+**Тесты:** 315 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-13 (F11.3 — max_api health check — implemented + verified + live-tested + committed + pushed)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F11.3 — max_api health check
+**Status:** implemented, verified, live-tested, committed, pushed
+
+### Context
+
+F11.1 и F11.2 завершены. Осталось добавить `max_api` в `/health` безопасно.
+
+### What was done
+
+- `src/services/health_service.py`:
+  - Добавлен `_check_max_api()` — `GET /me` на `max_api_base_url` через `httpx.AsyncClient(timeout=5.0)`.
+  - Кэш 30 секунд (`_last_max_api_status`, `_last_max_api_check`) — чтобы не рисковать rate limit.
+  - При ошибке любого рода → `max_api="error"`, логируется warning, /health не падает.
+  - `get_health_status()` теперь возвращает `{"status": ..., "db": ..., "max_api": ..., "uptime": ...}`.
+  - `status = "ok"` только при `db == "ok"` **и** `max_api == "ok"`, иначе `"degraded"`.
+- `tests/test_health_service.py`:
+  - Добавлен autouse `mock_max_api_ok` fixture — все тесты health_service не делают реальных сетевых вызовов.
+  - Новый тест `test_get_health_status_max_api_error` — monkeypatch `_check_max_api -> "error"` → `status=degraded`, `max_api=error`.
+- `tests/test_webhook.py`:
+  - В `disable_max_api_calls` добавлен monkeypatch `_check_max_api → "ok"` чтобы FastAPI lifespan + `/health` endpoint в тесте не делал реальный сетевой вызов MAX API.
+
+### Evidence
+
+- pytest: **315 passed** ✅
+- ruff: **exit 0** ✅
+- mypy: **Success: no issues found in 38 source files** ✅
+- init.ps1: **Architecture OK, === READY ===** ✅
+
+### Live-test evidence
+
+- Local: `curl.exe http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"33"}` ✅
+- Public: `curl.exe https://astralaser.ai-agent-paul.ru/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"94"}` ✅
+- Оба ответа содержат 4 поля: status, db, max_api, uptime ✅
+
+### Scope guard
+
+- F11 остаётся `in_progress` ✅ (F11.3 done, осталось F11.4 — final closure)
+- F12 — not started ✅
+- `.env` — not changed ✅
+- `feature_list.json` — not changed by agent ✅
+
+### Next best action
+
+- **F11.4 — Final closure** of F11: verify all acceptance criteria, live-test evidence, update `progress.md`, `feature_list.json`, commit/push. Only by explicit approve.
 
 ---
 
