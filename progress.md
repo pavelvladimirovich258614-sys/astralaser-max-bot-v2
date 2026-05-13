@@ -4,12 +4,86 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10.5.2d.3-d.4 broadcast max_chat_id + correct counting implemented and test-verified. Controlled live-test pending.
+**Статус проекта:** F10.5.2d.5 controlled live-test passed. F10 remains `in_progress` awaiting final closure.
 **Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (F10.5.2d.3-d.4 done; F10.5.2d.5 controlled live-test pending)
-**Последний коммит:** `fix(F10.5.2d): use chat id for broadcast sending` (pending commit/push)
+**Текущая фича:** F10 — Админ-панель (F10.5.2d.5 done; awaiting final DoD closure)
+**Последний коммит:** `fix(F10.5.2d): use chat id for broadcast sending` (pushed)
 **Тесты:** 300 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-13 (F10.5.2d.5 controlled broadcast live-test passed)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10.5.2d.5 — Controlled live-test of real broadcast via MAX API
+**Status:** live-test passed, evidence recorded, awaiting progress.md commit/push
+
+### Context
+
+F10.5.2d.3-d.4 implemented broadcast sending to `User.max_chat_id` with honest counting (`sent` / `failed` / `skipped`).
+This session verifies real delivery via MAX API on controlled test accounts before finalizing F10.
+
+### Controlled run A — limit=1
+
+- **Server environment (temporary PowerShell env only, `.env` not changed):**
+  - `BROADCAST_ENABLED=true`
+  - `BROADCAST_MAX_RECIPIENTS=1`
+  - `BROADCAST_THROTTLE_MS=500`
+- **Health check:** `https://astralaser.ai-agent-paul.ru/health` → `{"status":"ok"}` ✅
+- **MAX admin flow:** `/admin` → 📤 Рассылка → текст → preview → ✅ Отправить.
+- **Broadcast text:** `Тест F10.5.2d.5 limit=1. Проверка controlled broadcast.`
+- **Result summary:**
+  > отправлено 1,
+  > ошибок 0,
+  > пропущено 0.
+- **Delivery:** message received on admin test account ✅
+
+### Controlled run B — limit=2 (first attempt)
+
+- **Server environment:**
+  - `BROADCAST_ENABLED=true`
+  - `BROADCAST_MAX_RECIPIENTS=2`
+  - `BROADCAST_THROTTLE_MS=500`
+- **Broadcast text:** `Тест F10.5.2d.5 limit=2. Проверка двух тестовых аккаунтов.`
+- **Result summary:**
+  > отправлено 1,
+  > ошибок 0,
+  > пропущено 1.
+- **Explanation:** second test account did not yet have `max_chat_id` recorded at broadcast time. This is expected behavior — skipped_count correctly reflects missing `max_chat_id`.
+- **Recovery:** second test account sent `/start`, router captured and saved `max_chat_id`.
+
+### Controlled run B — limit=2 (repeat after /start)
+
+- **Server environment:** same as run B, no restart needed.
+- **Broadcast text:** `Тест F10.5.2d.5 repeat limit=2. Проверка после /start второго аккаунта.`
+- **MAX API logs:**
+  - `POST https://platform-api.max.ru/messages?chat_id=196318594 HTTP/1.1 200 OK` ✅
+  - `POST https://platform-api.max.ru/messages?chat_id=30782784 HTTP/1.1 200 OK` ✅
+- **Result:** messages delivered to both test accounts ✅
+- **No errors:** no 404 / dialog.not.found / rate limit / empty response observed ✅
+
+### Evidence
+
+- pytest: 300 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 36 source files ✅
+- init.ps1: Architecture OK, === READY === ✅
+- Live-test MAX: controlled broadcast limit=1 and limit=2 passed ✅
+
+### Scope guard
+
+- `.env` — not changed ✅
+- `.env.example` — not changed ✅
+- `src/config.py` — not changed ✅
+- `feature_list.json` — not changed (F10 remains `in_progress`) ✅
+- No code changes in this session ✅
+- No uvicorn / Start-Process / hidden server started by agent ✅
+
+### Next best action
+
+- Final closure of F10 (all DoD items): review remaining acceptance criteria, update `feature_list.json` (human), final commit/push.
+- Then proceed to F11 — Healthcheck + логирование.
 
 ---
 
