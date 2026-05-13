@@ -7,7 +7,9 @@ from sqlalchemy import delete, func, select
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
+from src.utils.logging_config import setup_logging
+
+setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
 
 

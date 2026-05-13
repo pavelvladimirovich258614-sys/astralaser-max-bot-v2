@@ -15,7 +15,10 @@ from src.db.models import Category, Product, ProductPhoto
 from src.services import max_upload_service
 
 SEED_FILE = Path(__file__).parent.parent / "data" / "seed_products.json"
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s - %(message)s')
+
+from src.utils.logging_config import setup_logging
+
+setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
 
 

@@ -6,9 +6,9 @@
 
 **Статус проекта:** F11 — Healthcheck + логирование — `in_progress`.
 **Последняя закрытая фича:** F10 — Админ-панель
-**Текущая фича:** F11 — Healthcheck + логирование (F11.1 implemented + verified + live-tested; next: F11.2)
-**Последний коммит:** `feat(F11.1): extend health endpoint`
-**Тесты:** 303 passed
+**Текущая фича:** F11 — Healthcheck + логирование (F11.1 and F11.2 implemented + verified + live-tested; next: F11.3)
+**Последний коммит:** `feat(F11.2): add structured logging`
+**Тесты:** 309 passed
 **Блокер:** нет
 
 ---
@@ -117,7 +117,69 @@ F11 opened as `in_progress` in previous session. This session implements F11.1 o
 
 ### Next best action
 
-- **F11.2 — Structured logging** — update `logging.basicConfig` in `src/main.py` with ISO 8601 format.
+- **F11.3 — max_api health check** — add safe MAX API connectivity check to `/health`. Only by explicit approve.
+
+---
+
+## Session Record — 2026-05-13 (F11.2 — Structured logging — implemented + verified + live-tested)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F11.2 — Structured logging
+**Status:** implemented, verified, live-tested, committed, pushed
+
+### Context
+
+F11.1 completed in previous session. This session implements F11.2 only.
+
+### What was done
+
+- `src/utils/logging_config.py` **created**:
+  - `_UTCFormatter` — custom `logging.Formatter` using `gmtime` converter for UTC timestamps.
+  - `DEFAULT_FORMAT = "%(asctime)s %(levelname)s %(name)s - %(message)s"`
+  - `DEFAULT_DATEFMT = "%Y-%m-%dT%H:%M:%SZ"` — ISO 8601-like with trailing `Z` per TZ spec.
+  - `setup_logging(level)` — idempotent configuration of root logger with `_UTCFormatter` and StreamHandler.
+- `src/main.py` **updated**:
+  - Replaced inline `logging.basicConfig()` with `setup_logging(get_settings().log_level)`.
+- `scripts/seed_db.py` **updated**:
+  - Replaced inline `logging.basicConfig()` with `setup_logging(logging.INFO)`.
+- `scripts/wipe_product_photos.py` **updated**:
+  - Replaced inline `logging.basicConfig()` with `setup_logging(logging.INFO)`.
+- `tests/test_logging_config.py` **created**:
+  - `test_sets_root_level` — string level applied correctly.
+  - `test_sets_root_level_from_int` — int level applied correctly.
+  - `test_idempotent_no_duplicate_handlers` — second call does not add duplicate handlers.
+  - `test_formatter_pattern` — format string matches expected pattern.
+  - `test_datefmt_iso_like` — datefmt includes trailing `Z`.
+  - `test_uses_gmtime` — formatter converter is `time.gmtime`.
+- `src/bot/webhook.py` **fixed**:
+  - Removed unused `# type: ignore[type-arg]` comment at `receive_update` signature (mypy 1.x now considers it redundant).
+
+### Evidence
+
+- pytest: **309 passed** ✅
+- ruff: **exit 0** ✅
+- mypy: **Success: no issues found in 38 source files** ✅
+- init.ps1: **=== READY ===** ✅
+
+### Live-test evidence
+
+- Local logs now show UTC ISO-like timestamp with trailing `Z`:
+  - `2026-05-13T10:56:42Z INFO src.bot.max_client - Webhook subscribed...`
+  - `2026-05-13T10:56:42Z INFO src.main - Webhook subscribed at...`
+  - `2026-05-13T10:57:35Z INFO src.main - Shutting down...`
+- Local health: `curl http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","uptime":"7"}` ✅
+- Public health: `curl https://astralaser.ai-agent-paul.ru/health` → `{"status":"ok","db":"ok","uptime":"41"}` ✅
+
+### Scope guard
+
+- F11.3 (max_api health check) — not started ✅
+- F12 — not started ✅
+- `.env` — not changed ✅
+- `feature_list.json` — not changed (F11 remains `in_progress`) ✅
+
+### Next best action
+
+- **F11.3 — max_api health check** — add safe MAX API connectivity check to `/health` with cache/timeout/fallback. Only by explicit approve.
 
 ---
 
