@@ -166,8 +166,10 @@
     {
       "id": "F10",
       "name": "Админ-панель",
-      "status": "in_progress",
+      "status": "completed",
       "started_at": "2026-05-11",
+      "completed_at": "2026-05-13",
+      "evidence": "pytest: 300 passed, ruff: exit 0, mypy: clean, init.ps1: READY, live-test MAX: controlled broadcast limit=1 and limit=2 passed with honest sent/failed/skipped counters",
       "depends_on": ["F09"],
       "acceptance_criteria": [
         "/admin доступен только пользователям из MAX_ADMIN_USER_IDS",

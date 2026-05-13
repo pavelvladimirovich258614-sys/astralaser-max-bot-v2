@@ -4,12 +4,66 @@
 
 ## Current Verified State
 
-**Статус проекта:** F10.5.2d.5 controlled live-test passed. F10 remains `in_progress` awaiting final closure.
-**Последняя закрытая фича:** F09 — Проверка подписки на канал
-**Текущая фича:** F10 — Админ-панель (F10.5.2d.5 done; awaiting final DoD closure)
-**Последний коммит:** `fix(F10.5.2d): use chat id for broadcast sending` (pushed)
+**Статус проекта:** F10 — Админ-панель — `completed`. Все staged-подфичи закрыты.
+**Последняя закрытая фича:** F10 — Админ-панель
+**Текущая фича:** F11 — Healthcheck + логирование (ожидает старта по explicit approve)
+**Последний коммит:** `docs(F10): close admin panel`
 **Тесты:** 300 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-13 (F10 — Админ-панель — final closure)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F10 — Админ-панель
+**Status:** `completed`
+
+### Closure checklist (DoD)
+
+1. ✅ Код написан, импортируется без ошибок
+2. ✅ `python -m pytest -v` — 300 passed
+3. ✅ `python -m ruff check .` — exit 0
+4. ✅ `python -m mypy src/` — Success: no issues found in 36 source files
+5. ✅ `.​init.ps1` — Architecture OK, === READY ===
+6. ✅ Бот стартует и отвечает на тестовое сообщение в MAX
+7. ✅ В `progress.md` записаны все Session Records с evidence
+8. ✅ Изменения закоммичены и запушены
+
+### Staged sub-features completed
+
+- F10.1 — Доступ и главное меню админки ✅
+- F10.2 — Управление заказами ✅
+- F10.3 — Управление видимостью товаров ✅
+- F10.4.1 — Добавление товара через FSM ✅
+- F10.5.1 — Рассылка: draft и preview ✅
+- F10.5.2a — Broadcast plan service ✅
+- F10.5.2b — Handler connected safely ✅
+- F10.5.2d.1 — User.max_chat_id + migration + CRUD/service ✅
+- F10.5.2d.2 — Router сохраняет dialog chat_id ✅
+- F10.5.2d.3-d.4 — Broadcast uses max_chat_id, honest sent/failed/skipped ✅
+- F10.5.2d.5 — Controlled live-test passed (limit=1 and limit=2 delivered successfully) ✅
+
+### Final evidence
+
+- pytest: 300 passed ✅
+- ruff: exit 0 ✅
+- mypy: Success: no issues found in 36 source files ✅
+- init.ps1: Architecture OK, === READY === ✅
+- Live-test MAX: F10.5.2d.5 controlled broadcast delivered to test accounts with honest counters ✅
+
+### Scope guard
+
+- `.env` — not changed ✅
+- `.env.example` — not changed ✅
+- `src/config.py` — not changed ✅
+- No code changes in this closure session ✅
+- `feature_list.json` — updated by agent (F10 → completed) ✅
+- F11 — not started ✅
+
+### Next best action
+
+- **F11 — Healthcheck + логирование** — начать по explicit approve.
 
 ---
 
