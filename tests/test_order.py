@@ -901,3 +901,73 @@ async def test_confirm_order_notification_failure_does_not_break_order(db_sessio
 
     admin_success = [c for c in client.calls if c["method"] == "send_message" and c["chat_id"] == "196318595"]
     assert len(admin_success) == 1
+
+
+# ---------------------------------------------------------------------------
+# My orders screen (client order history)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_show_my_orders_empty_shows_no_orders_text(db_session):
+    """Если у пользователя нет заказов — показывает 'У вас пока нет заказов.'"""
+    user = User(max_user_id="1000", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await order_handler.show_my_orders(client, chat_id=1, user_id="1000", message_id="msg_1")
+
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert call["method"] == "edit_message"
+    assert "📦 Мои заказы" in call["text"]
+    assert "У вас пока нет заказов" in call["text"]
+
+
+@pytest.mark.asyncio
+async def test_show_my_orders_with_orders_shows_compact_list(db_session):
+    """Если есть заказы — показывает компактный список с номером, статусом, суммой."""
+    user = User(max_user_id="1001", full_name="Test")
+    db_session.add(user)
+    await db_session.flush()
+    product = Product(category_id=1, title="P", description="D", price=250, cover_url="url")
+    db_session.add(product)
+    await db_session.flush()
+    cart = CartItem(user_id=user.id, product_id=product.id, quantity=1)
+    db_session.add(cart)
+    await db_session.commit()
+
+    await fsm_service.set_state(
+        db_session, user.id, "order:ready_confirm",
+        {"customer_name": "Иван", "phone": "+7", "address": "М", "notes": "N"}
+    )
+
+    client = RecordingClient()
+    await order_handler.confirm_order(client, chat_id=1, user_id="1001", message_id="msg_1")
+
+    # Теперь у user 1 заказ
+    client2 = RecordingClient()
+    await order_handler.show_my_orders(client2, chat_id=1, user_id="1001", message_id="msg_2")
+
+    assert len(client2.calls) == 1
+    call = client2.calls[0]
+    assert call["method"] == "edit_message"
+    assert "#1" in call["text"]
+    assert "250 ₽" in call["text"]
+    assert "⏳ Ожидает подтверждения" in call["text"]
+
+
+@pytest.mark.asyncio
+async def test_show_my_orders_uses_send_message_without_message_id(db_session):
+    """Без message_id используется send_message."""
+    user = User(max_user_id="1002", full_name="Test")
+    db_session.add(user)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await order_handler.show_my_orders(client, chat_id=1, user_id="1002")
+
+    assert len(client.calls) == 1
+    assert client.calls[0]["method"] == "send_message"
+    assert "У вас пока нет заказов" in client.calls[0]["text"]

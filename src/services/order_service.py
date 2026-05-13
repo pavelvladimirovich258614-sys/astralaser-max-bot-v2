@@ -30,6 +30,12 @@ def format_manager_notification(
     return "\n".join(lines)
 
 
+async def get_user_orders(session: AsyncSession, user_id: int) -> list[Order]:
+    """Получить последние 5 заказов пользователя (сортировка по убыванию id)."""
+    orders = await order_crud.get_by_user(session, user_id)
+    return orders[:5]
+
+
 async def create_order_from_cart(
     session: AsyncSession,
     user_id: int,

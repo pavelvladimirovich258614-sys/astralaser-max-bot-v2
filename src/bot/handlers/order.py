@@ -21,6 +21,13 @@ logger = logging.getLogger(__name__)
 
 _PHONE_RE = re.compile(r"^\+?\d[\d\s\-\(\)]{9,17}$")
 
+_STATUS_LABELS: dict[str, str] = {
+    "pending": "⏳ Ожидает подтверждения",
+    "confirmed": "✅ Подтверждён",
+    "completed": "🏁 Завершён",
+    "cancelled": "❌ Отменён",
+}
+
 
 async def _best_effort_delete(
     client: MAXClient,
@@ -336,6 +343,38 @@ def _validate_phone(text: str) -> bool:
     return bool(_PHONE_RE.match(stripped))
 
 
+async def show_my_orders(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    message_id: str | None = None,
+) -> None:
+    """Показать историю заказов пользователя (до 5 последних)."""
+    async with async_session_maker() as session:
+        user = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        orders = await order_service.get_user_orders(session, user.id)
+
+        if not orders:
+            text = "📦 Мои заказы\n\nУ вас пока нет заказов."
+            keyboard = empty_cart_keyboard()
+        else:
+            lines = ["📦 Мои заказы"]
+            for order in orders:
+                status_text = _STATUS_LABELS.get(order.status, order.status)
+                date_str = order.created_at.strftime("%d.%m.%Y") if order.created_at else "—"
+                lines.append(f"\n#{order.id} — {status_text}")
+                lines.append(f"Итого: {order.total_amount} ₽ | {date_str}")
+            text = "\n".join(lines)
+            keyboard = order_confirmed_keyboard()
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)
+
+
 def _validate_address(text: str) -> bool:
     stripped = text.strip()
     return bool(stripped) and 5 <= len(stripped) <= 300
+

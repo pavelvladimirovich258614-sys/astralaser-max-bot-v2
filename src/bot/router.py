@@ -160,7 +160,7 @@ class UpdateRouter:
             return
 
         if data == "menu:orders":
-            await self.client.edit_message(chat_id, message_id, "📦 Мои заказы — скоро.")
+            await order_handler.show_my_orders(self.client, chat_id, user_id, message_id)
             return
 
         if data == "sub:check":

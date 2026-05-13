@@ -7,9 +7,74 @@
 **Статус проекта:** F11 — Healthcheck + логирование — `in_progress`.
 **Последняя закрытая фича:** F10 — Админ-панель
 **Текущая фича:** F11 — Healthcheck + логирование (F11.1 and F11.2 implemented + verified + live-tested; next: F11.3)
-**Последний коммит:** `feat(admin): add short stats and remove categories menu`
-**Тесты:** 311 passed
+**Последний коммит:** `feat(order): add client order history`
+**Тесты:** 314 passed
 **Блокер:** нет
+
+---
+
+## Session Record — 2026-05-13 (Client "📦 Мои заказы" implemented + verified + live-tested + committed + pushed)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** Client order history (between F11.2 and F11.3)
+**Status:** implemented, verified, live-tested, committed, pushed
+
+### Context
+
+Small UX patch — replace placeholder "📦 Мои заказы — скоро." with real compact order history. No feature status change.
+
+### What was done
+
+- `src/services/order_service.py` — added `get_user_orders(session, user_id)` → last 5 orders via `order_crud.get_by_user` + `[:5]`.
+- `src/bot/handlers/order.py`:
+  - Added `_STATUS_LABELS` map for compact status display (`pending → ⏳`, etc.).
+  - Implemented `show_my_orders()` handler:
+    - No orders → edit/send message with "📦 Мои заказы\n\nУ вас пока нет заказов." and `empty_cart_keyboard()`.
+    - With orders → compact list: `#{id} — {status_label}`, `Итого: {amount} ₽ | {dd.mm.yyyy}`.
+    - Keyboard → `order_confirmed_keyboard()` (🏠 Главная).
+- `src/bot/router.py` — replaced `edit_message("📦 Мои заказы — скоро.")` with `order_handler.show_my_orders(...)` for `menu:orders` callback.
+- `tests/test_order.py` — added 3 tests:
+  - `test_show_my_orders_empty_shows_no_orders_text` — empty DB → placeholder text.
+  - `test_show_my_orders_with_orders_shows_compact_list` — real order → `#1` + amount + status label.
+  - `test_show_my_orders_uses_send_message_without_message_id` — `send_message` branch.
+- `tests/test_router.py` — updated `test_router_duplicate_callback_ignored` assert to substring match "📦 Мои заказы" instead of exact old placeholder text.
+
+### Evidence
+
+- pytest: **314 passed** ✅
+- ruff: **exit 0** ✅
+- mypy: **Success: no issues found in 38 source files** ✅
+- init.ps1: **Architecture OK, === READY ===** ✅
+
+### Live-test evidence
+
+- User clicked "📦 Мои заказы" in MAX → real order history displayed ✅
+- Example output:
+```
+📦 Мои заказы
+#5 — ⏳ Ожидает подтверждения
+Итого: 2520 ₽ | 13.05.2026
+#4 — 🏁 Завершён
+Итого: 840 ₽ | 09.05.2026
+#3 — 🏁 Завершён
+Итого: 940 ₽ | 09.05.2026
+#2 — ⏳ Ожидает подтверждения
+Итого: 940 ₽ | 09.05.2026
+#1 — ✅ Подтверждён
+Итого: 940 ₽ | 09.05.2026
+```
+- Button "🏠 Главная" works and returns user to main menu ✅
+
+### Scope guard
+
+- F11.3 (max_api health check) — not started ✅
+- F12 (deploy) — not started ✅
+- `.env` — not changed ✅
+- `feature_list.json` — not changed (F11 remains `in_progress`) ✅
+
+### Next best action
+
+- **F11.3 — max_api health check** — add safe MAX API connectivity check to `/health` with cache/timeout/fallback. Only by explicit approve.
 
 ---
 

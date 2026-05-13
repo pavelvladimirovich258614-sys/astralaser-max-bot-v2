@@ -334,7 +334,7 @@ async def test_router_duplicate_callback_ignored(router):
     payload = _make_callback_payload("menu:orders")
     await r.process(payload)
     await r.process(payload)
-    orders_calls = [c for c in client.calls if c.get("text") == "📦 Мои заказы — скоро."]
+    orders_calls = [c for c in client.calls if "📦 Мои заказы" in c.get("text", "")]
     assert len(orders_calls) == 1
 
 
