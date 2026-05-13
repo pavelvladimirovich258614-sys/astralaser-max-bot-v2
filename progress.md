@@ -6,9 +6,9 @@
 
 **Статус проекта:** F11 — Healthcheck + логирование — `in_progress`.
 **Последняя закрытая фича:** F10 — Админ-панель
-**Текущая фича:** F11 — Healthcheck + логирование (F11.1 staged plan recorded; awaiting BUILD)
-**Последний коммит:** `docs(F11): record healthcheck logging staged plan`
-**Тесты:** 300 passed
+**Текущая фича:** F11 — Healthcheck + логирование (F11.1 implemented + verified + live-tested; next: F11.2)
+**Последний коммит:** `feat(F11.1): extend health endpoint`
+**Тесты:** 303 passed
 **Блокер:** нет
 
 ---
@@ -63,6 +63,61 @@ Staged plan prepared in PLAN mode; this session records the plan and opens F11.
 ### Next best action
 
 - **BUILD F11.1** — Extended /health endpoint with db check and uptime.
+
+---
+
+## Session Record — 2026-05-13 (F11.1 — Extended /health endpoint — implemented + verified + live-tested)
+
+**Agent:** Kimi K2.6 (OpenCode)
+**Feature:** F11.1 — Extended /health endpoint
+**Status:** implemented, verified, live-tested, committed, pushed
+
+### Context
+
+F11 opened as `in_progress` in previous session. This session implements F11.1 only.
+
+### What was done
+
+- `src/services/health_service.py` **created**:
+  - `_START_TIME = time.time()` at module import — uptime baseline.
+  - `async get_health_status() -> dict[str, str]` — returns `{"status": "...", "db": "...", "uptime": "..."}`.
+  - `async _check_db() -> str` — `SELECT 1` via `engine.connect()` from `src.db.engine`.
+  - DB ok → `status="ok"`, `db="ok"`.
+  - DB error → `status="degraded"`, `db="error"` (catches `SQLAlchemyError` and generic `Exception`, logs warning).
+- `src/bot/webhook.py` **updated**:
+  - Imports `get_health_status` from `src.services.health_service`.
+  - `/health` now `return await get_health_status()` — `/webhook` unchanged.
+- `tests/test_webhook.py` **updated**:
+  - `test_health` checks keys `status`, `db`, `uptime` instead of hard `{"status": "ok"}`.
+- `tests/test_health_service.py` **created**:
+  - `test_get_health_status_includes_uptime` — uptime present and `>= 0`.
+  - `test_get_health_status_db_ok` — `status=ok`, `db=ok`.
+  - `test_get_health_status_db_error` — monkeypatch `_check_db` → `error`, verifies `status=degraded`, `db=error`.
+
+### Evidence
+
+- pytest: **303 passed** ✅
+- ruff: **exit 0** ✅
+- mypy: **Success: no issues found in 37 source files** ✅
+- init.ps1: **=== READY ===** ✅
+
+### Live-test evidence
+
+- Local: `curl.exe http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","uptime":"89"}` ✅
+- Public: `curl.exe https://astralaser.ai-agent-paul.ru/health` → `{"status":"ok","db":"ok","uptime":"97"}` ✅
+- Uvicorn logs: `GET /health HTTP/1.1 200 OK` for both requests ✅
+
+### Scope guard
+
+- F11.2 (structured logging) — not started ✅
+- F11.3 (max_api health check) — not started ✅
+- F12 — not started ✅
+- `.env` — not changed ✅
+- `feature_list.json` — not changed (F11 remains `in_progress`) ✅
+
+### Next best action
+
+- **F11.2 — Structured logging** — update `logging.basicConfig` in `src/main.py` with ISO 8601 format.
 
 ---
 

@@ -20,7 +20,10 @@ def test_health() -> None:
     with TestClient(app) as c:
         r = c.get("/health")
         assert r.status_code == 200
-        assert r.json() == {"status": "ok"}
+        data = r.json()
+        assert data["status"] == "ok"
+        assert data["db"] == "ok"
+        assert int(data["uptime"]) >= 0
 
 
 def test_webhook_accepts_post() -> None:

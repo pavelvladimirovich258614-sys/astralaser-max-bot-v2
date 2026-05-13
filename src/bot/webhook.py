@@ -6,6 +6,8 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Request
 
+from src.services.health_service import get_health_status
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -34,4 +36,4 @@ async def receive_update(request: Request, background: BackgroundTasks) -> dict[
 
 @router.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return await get_health_status()
