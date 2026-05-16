@@ -171,6 +171,9 @@ async def test_router_callback_home(router):
     assert send_call["reply_markup"][3] == [
         {"type": "callback", "text": "🖼 Наши работы", "payload": "gallery_works"},
     ]
+    assert send_call["reply_markup"][4] == [
+        {"type": "link", "text": "📍 Пункты выдачи СДЭК", "url": "https://www.cdek.ru/ru/offices/cdek"},
+    ]
     assert send_call["reply_markup"][-1] == [
         {"type": "link", "text": "📦 Ozon", "url": "https://ozon.ru/s/astralaser"},
         {"type": "link", "text": "🟣 Wildberries", "url": "https://www.wildberries.ru/brands/311460915-astralaser"},

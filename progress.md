@@ -2816,3 +2816,31 @@ F05 каталог (категории, карточки, пагинация ф�
 
 **Next best action:** Человек нажимает `🖼 Наши работы` в новом MAX меню и визуально подтверждает placeholder-текст в клиенте.
 
+## Session Record — 2026-05-17 07:09
+
+**Agent:** Codex
+**Feature:** П5-sdek-branch-locator-link
+**Status:** completed
+
+**What was done:**
+- src/bot/keyboards.py: в нижний блок внешних ссылок главного меню добавлена link-кнопка `📍 Пункты выдачи СДЭК` → `https://www.cdek.ru/ru/offices/cdek`.
+- tests/test_handlers.py, tests/test_router.py: обновлены проверки структуры главного меню и callback `home`, чтобы фиксировать СДЭК-кнопку рядом с внешними ссылками.
+- feature_list.json: П5 добавлена и помечена как `completed` по прямому DoD задачи.
+
+**Evidence:**
+- targeted tests: `tests/test_handlers.py tests/test_router.py` → 71 passed
+- pytest: 319 passed, 541 warnings
+- ruff: exit 0
+- mypy: Success, no issues found in 38 source files
+- init.ps1: === READY ===
+- server init.sh: === READY ===
+- runtime: `systemctl restart astralaser.service` → active
+- runtime: `GET http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"11"}`
+- runtime: production grep confirms deployed `src/bot/keyboards.py` contains `{"type": "link", "text": "📍 Пункты выдачи СДЭК", "url": "https://www.cdek.ru/ru/offices/cdek"}`
+
+**Notes / follow-ups:**
+- Кнопка информационная: `type=link`, callback/handler не нужен, данные обратно в бота не отправляются.
+- Client-side открытие внешнего браузера из MAX требует ручного нажатия в живом клиенте; payload структуры покрыт тестами и будет проверен на production файлах.
+
+**Next best action:** Человек открывает новое `/start` меню в MAX и кликает `📍 Пункты выдачи СДЭК`, чтобы визуально подтвердить client-side открытие внешнего браузера.
+

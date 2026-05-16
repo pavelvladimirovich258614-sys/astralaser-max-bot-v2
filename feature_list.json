@@ -306,6 +306,23 @@
         "Harness returns === READY ===",
         "Production service is restarted and /health returns ok"
       ]
+    },
+    {
+      "id": "П5",
+      "name": "SDEK branch locator information button",
+      "status": "completed",
+      "started_at": "2026-05-17",
+      "completed_at": "2026-05-17",
+      "evidence": "Main menu bottom external-link section contains 📍 Пункты выдачи СДЭК with MAX type=link and URL https://www.cdek.ru/ru/offices/cdek; init.ps1/init.sh READY with 319 passed, ruff clean, mypy clean; production service restarted and /health ok.",
+      "depends_on": ["П17"],
+      "acceptance_criteria": [
+        "Главное меню содержит link-кнопку 📍 Пункты выдачи СДЭК",
+        "Кнопка использует MAX type=link",
+        "Кнопка ведёт на https://www.cdek.ru/ru/offices/cdek",
+        "Кнопка находится в нижнем блоке внешних ссылок рядом с Ozon/Wildberries",
+        "Harness returns === READY ===",
+        "Production service is restarted and /health returns ok"
+      ]
     }
   ]
 }
