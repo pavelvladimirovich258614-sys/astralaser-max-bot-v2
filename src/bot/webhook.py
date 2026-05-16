@@ -22,7 +22,7 @@ def set_update_processor(processor: Callable[[dict[str, Any]], Any]) -> None:
 
 
 @router.post("/webhook")
-async def receive_update(request: Request, background: BackgroundTasks) -> dict[str, Any]:  # type: ignore[type-arg]
+async def receive_update(request: Request, background: BackgroundTasks) -> dict[str, Any]:  # type: ignore[type-arg, unused-ignore]
     """MAX доставляет update сюда. Отвечаем 200 OK мгновенно, обработка — в фоне."""
     payload = await request.json()
     logger.info("webhook received update: %s", payload.get("update_type", "unknown"))

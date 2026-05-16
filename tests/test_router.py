@@ -26,7 +26,7 @@ class FakeClient:
         self.calls.append({"method": "edit_message", "chat_id": chat_id, "text": text, "reply_markup": reply_markup})
 
     async def send_message(self, chat_id, text, reply_markup=None, photo_url=None, photo=None):
-        self.calls.append({"method": "send_message", "chat_id": chat_id, "text": text})
+        self.calls.append({"method": "send_message", "chat_id": chat_id, "text": text, "reply_markup": reply_markup})
 
     async def delete_message(self, chat_id, message_id):
         self.calls.append({"method": "delete_message", "chat_id": chat_id, "message_id": message_id})
@@ -165,6 +165,23 @@ async def test_router_callback_home(router):
     # Default flag True → delete_message + send_message
     assert any("delete_message" == c["method"] for c in client.calls)
     assert any("send_message" == c["method"] for c in client.calls)
+    send_call = next(c for c in client.calls if c["method"] == "send_message")
+    assert send_call["reply_markup"][0][0]["payload"] == "menu:catalog"
+    assert send_call["reply_markup"][-1] == [
+        {"type": "link", "text": "📦 Ozon", "url": "https://ozon.ru/s/astralaser"},
+        {"type": "link", "text": "🟣 Wildberries", "url": "https://www.wildberries.ru/brands/311460915-astralaser"},
+    ]
+    assert all(button["type"] != "open_app" for row in send_call["reply_markup"] for button in row)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_instruction_close_deletes_message(router):
+    r, client = router
+    await r.process(_make_callback_payload("instruction:close"))
+
+    assert client.calls == [
+        {"method": "delete_message", "chat_id": "456", "message_id": "msg_1"},
+    ]
 
 
 @pytest.mark.asyncio

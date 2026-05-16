@@ -139,6 +139,10 @@ class UpdateRouter:
             await start_handler.handle_consent_accept(self.client, chat_id, user_id, message_id)
             return
 
+        if data == "instruction:close":
+            await self.client.delete_message(chat_id, message_id)
+            return
+
         if data == "catalog" or data == "menu:catalog":
             await catalog_handler.show_catalog(self.client, chat_id, message_id)
             return

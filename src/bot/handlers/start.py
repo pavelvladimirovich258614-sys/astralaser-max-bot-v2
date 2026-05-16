@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Any
 
-from src.bot.keyboards import consent_keyboard, main_menu_inline_keyboard
+from src.bot.keyboards import consent_keyboard, main_menu_inline_keyboard, shop_instruction_keyboard
 from src.bot.max_client import MAXClient
 from src.db.engine import async_session_maker
 from src.services import user_service
@@ -30,9 +31,14 @@ MAIN_MENU_TEXT = """🌟 Astralaser — украшения с персональ
 📦 Доставка СДЭК по всей России
 💝 Бархатная сумочка в комплекте
 
+🛍 ДЛЯ ПЕРЕХОДА В МАГАЗИН НАЖМИТЕ НА КНОПКУ В ЛЕВОМ НИЖНЕМ УГЛУ ЭКРАНА
+
 Выберите раздел, чтобы начать."""
 
 MAIN_MENU_PHOTO = "https://i.postimg.cc/vm2rdtGg/IMG-20260505-105827.png"
+SHOP_INSTRUCTION_PHOTO = "https://i.ibb.co/5h3WLKbZ/IMG-20260516-211207.png"
+SHOP_INSTRUCTION_TEXT = "🛍 ДЛЯ ПЕРЕХОДА В МАГАЗИН НАЖМИТЕ НА КНОПКУ В ЛЕВОМ НИЖНЕМ УГЛУ ЭКРАНА"
+SHOP_INSTRUCTION_DELAY_SECONDS = 10.0
 
 
 async def handle_start(client: MAXClient, chat_id: int | str, user_id: int | str, user_info: dict[str, Any]) -> None:
@@ -56,6 +62,7 @@ async def handle_start(client: MAXClient, chat_id: int | str, user_id: int | str
             reply_markup=main_menu_inline_keyboard(),
             photo_url=MAIN_MENU_PHOTO,
         )
+        await send_delayed_shop_instruction(client, chat_id)
 
 
 async def handle_consent_accept(
@@ -74,7 +81,26 @@ async def handle_consent_accept(
     )
 
 
-async def show_main_menu(client: MAXClient, chat_id: int | str, message_id: str | None = None) -> None:
+async def send_delayed_shop_instruction(
+    client: MAXClient,
+    chat_id: int | str,
+    delay_seconds: float = SHOP_INSTRUCTION_DELAY_SECONDS,
+) -> None:
+    """Отправить визуальную подсказку по системной Mini App кнопке после задержки."""
+    await asyncio.sleep(delay_seconds)
+    await client.send_message(
+        chat_id,
+        SHOP_INSTRUCTION_TEXT,
+        reply_markup=shop_instruction_keyboard(),
+        photo_url=SHOP_INSTRUCTION_PHOTO,
+    )
+
+
+async def show_main_menu(
+    client: MAXClient,
+    chat_id: int | str,
+    message_id: str | None = None,
+) -> None:
     """Показать главное меню. edit_message если message_id, иначе send_message."""
     if message_id and _USE_PHOTO_URL_IN_EDIT:
         await client.delete_message(chat_id, message_id)

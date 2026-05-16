@@ -212,6 +212,66 @@
         "Бот живёт после systemctl restart",
         "ufw настроен (22, 80, 443)"
       ]
+    },
+    {
+      "id": "F13",
+      "name": "Priority Mini App button (MAX Bridge)",
+      "status": "removed",
+      "started_at": "2026-05-16",
+      "completed_at": "2026-05-16",
+      "removed_at": "2026-05-16",
+      "evidence": "Removed after live MAX clients showed dead Mini App inline button: visual render worked, but PC loaded forever and mobile did not respond. Stable fallback is the system Mini App button on the left.",
+      "depends_on": ["F11"],
+      "acceptance_criteria": [
+        "Inline open_app button removed from main menu",
+        "No contact_id plumbing remains in main menu keyboard calls",
+        "Users are directed to the working system Mini App button instead"
+      ]
+    },
+    {
+      "id": "F14",
+      "name": "Mini App system button text instruction",
+      "status": "completed",
+      "started_at": "2026-05-16",
+      "completed_at": "2026-05-16",
+      "evidence": "Greeting text instructs users to press the system Mini App button in the lower-left corner; markdown asterisks removed after MAX rendered them literally.",
+      "depends_on": ["F13"],
+      "acceptance_criteria": [
+        "Главное меню не содержит кнопку 🛍 Открыть приложение магазин",
+        "Приветствие содержит заметную инструкцию про кнопку в левом нижнем углу",
+        "Каталог и корзина остаются в inline menu первыми стабильными callback-кнопками"
+      ]
+    },
+    {
+      "id": "F15",
+      "name": "Main menu marketplace URL buttons",
+      "status": "completed",
+      "started_at": "2026-05-16",
+      "completed_at": "2026-05-16",
+      "evidence": "Main menu bottom row contains MAX link buttons for Ozon and Wildberries; runtime check confirmed type=link is accepted by MAX API while type=url is rejected with proto.payload.",
+      "depends_on": ["F14"],
+      "acceptance_criteria": [
+        "Главное меню заканчивается рядом link-кнопок 📦 Ozon и 🟣 Wildberries",
+        "Ozon ведёт на https://ozon.ru/s/astralaser",
+        "Wildberries ведёт на https://www.wildberries.ru/brands/311460915-astralaser",
+        "Порядок меню: Catalog/Cart → Orders/Help → Manager → Ozon/Wildberries"
+      ]
+    },
+    {
+      "id": "F16",
+      "name": "Delayed visual Mini App instruction",
+      "status": "completed",
+      "started_at": "2026-05-16",
+      "completed_at": "2026-05-16",
+      "evidence": "After consented /start, bot sends the main menu immediately, waits 10 seconds with non-blocking asyncio.sleep, then sends the visual instruction image with instruction:close button; router deletes that message on callback.",
+      "depends_on": ["F15"],
+      "acceptance_criteria": [
+        "Initial menu is sent immediately for consented /start users",
+        "After 10 seconds, a second message is sent with the instruction image",
+        "Instruction text is uppercase and matches the system Mini App button guidance",
+        "Instruction keyboard contains ✅ Прочитано with payload instruction:close",
+        "instruction:close deletes the instruction message by message_id"
+      ]
     }
   ]
 }

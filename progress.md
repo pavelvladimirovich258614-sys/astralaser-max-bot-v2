@@ -4,12 +4,15 @@
 
 ## Current Verified State
 
-**Статус проекта:** F11 — Healthcheck + логирование — `completed`. F12 — Деплой — `todo`, не начат.
-**Последняя закрытая фича:** F11 — Healthcheck + логирование
-**Текущая фича:** нет (ожидание explicit approve на F12 — Деплой)
-**Последний коммит:** `docs(F11): close healthcheck logging`
-**Тесты:** 315 passed
+**Статус проекта:** Main menu UI stabilized on production server `/opt/astralaser-max-bot-v2`.
+**Последние закрытые фичи:** F13 `removed`, F14 `completed`, F15 `completed`, F16 `completed`.
+**Текущая фича:** нет.
+**Последний коммит:** pending final closure commit `feat: implement visual on-boarding instruction, marketplace links, and clean up main menu UI`.
+**Тесты:** 318 passed
 **Блокер:** нет
+**MAX UI strategy:** inline `open_app` removed after dead-button behavior; users are guided to the working system Mini App button via greeting text plus delayed visual instruction.
+**Main menu:** stable order is Catalog/Cart → Orders/Help → Manager → Ozon/Wildberries. Marketplace buttons use MAX `type=link`; `type=url` was rejected by production MAX API with `proto.payload`.
+**mypy:** clean; the previous `src/bot/webhook.py` Request blocker is resolved for the current local/server toolchain.
 
 ---
 
@@ -2561,4 +2564,198 @@ F05 каталог (категории, карточки, пагинация ф�
 
 ### Local commits
 Последние WIP-коммиты лежат локально, push НЕ делался — push будет после зелёного финального live-test.
+
+## Session Record — 2026-05-16 20:19
+
+**Agent:** Codex
+**Feature:** F13-priority-mini-app-button
+**Status:** completed
+
+**What was done:**
+- src/bot/keyboards.py: добавлена первая inline-кнопка `open_app` для MAX Mini App.
+- src/bot/webhook.py: закрыт mypy blocker на `Request` с совместимым ignore для разных версий FastAPI/mypy.
+- tests/test_handlers.py: добавлен тест точной структуры и позиции priority Mini App button.
+- Server `/opt/astralaser-max-bot-v2`: обновлены файлы, нормализованы LF, перезапущен `astralaser.service`.
+- feature_list.json: добавлена completed-запись F13 по явному override пользователя.
+
+**Evidence:**
+- pytest: 316 passed
+- ruff: exit 0
+- mypy: Success, no issues found in 38 source files
+- init.ps1: === READY ===
+- server init.sh: === READY ===
+- runtime: `systemctl restart astralaser.service` → active
+- runtime: `GET http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"2"}`
+- runtime: first production button JSON:
+  `{"contact_id":0,"payload":"open_shop","text":"🛍 Открыть приложение магазин","type":"open_app","web_app":"https://admin.webbot.shop/max_shop/a144bac7-dfa8-436f-a36a-e446b19106ca/"}`
+- runtime: live MAX API send to admin chat `196318594` returned `message.body.attachments[0].payload.buttons[0][0].type=open_app`
+- runtime: synthetic `/start` webhook to production returned `{"ok":true}` and service logs show `POST https://platform-api.max.ru/messages?chat_id=196318594 "HTTP/1.1 200 OK"`
+
+**Notes / follow-ups:**
+- Серверное окружение использует Python 3.10.12, локальное — Python 3.12.10; `Request` аннотация оставлена совместимой с обеими mypy/FastAPI связками.
+- Физический click-test внутри клиента MAX должен быть подтверждён человеком в полученном live-сообщении, так как серверный доступ не может нажать кнопку в пользовательском MAX UI.
+
+**Next best action:** Человек нажимает кнопку `🛍 Открыть приложение магазин` в MAX admin chat и подтверждает, что Mini App открывается внутри MAX, как системная side-button.
+
+## Session Record — 2026-05-16 20:38
+
+**Agent:** Codex
+**Feature:** F13-priority-mini-app-button
+**Status:** deployed → awaiting human PC/mobile click confirmation
+
+**What was done:**
+- src/bot/keyboards.py: `main_menu_inline_keyboard()` теперь принимает runtime `contact_id` и подставляет фактический MAX user id в кнопку `open_app`.
+- src/bot/handlers/start.py: `/start`, consent accept и `show_main_menu()` передают текущий `user_id` в клавиатуру.
+- src/bot/router.py: callback `home` передаёт текущий `user_id` в `show_main_menu()`.
+- src/bot/handlers/admin.py: `admin:exit` возвращает в главное меню с текущим `user_id`.
+- tests/test_handlers.py, tests/test_router.py, tests/test_admin.py: обновлены тесты структуры, позиции и прокидывания `contact_id`.
+
+**Why previous version failed:**
+- Кнопка с `contact_id: 0` была валидной для визуального рендера MAX, поэтому она отображалась в чате.
+- Для Mini App handshake MAX Bridge нужен реальный пользовательский контекст; `contact_id: 0` не связывал inline button с MAX user session, что объясняет бесконечную загрузку на PC и молчание на mobile.
+- URL не менялся: рабочий Mini App URL остался `https://admin.webbot.shop/max_shop/a144bac7-dfa8-436f-a36a-e446b19106ca/`.
+
+**Evidence:**
+- pytest: 316 passed
+- ruff: exit 0
+- mypy: Success, no issues found in 38 source files
+- init.ps1: === READY ===
+- server init.sh: === READY ===
+- runtime: `systemctl restart astralaser.service` → active
+- runtime: `GET http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"20"}`
+- runtime: live MAX API response first button:
+  `{"web_app":"https://admin.webbot.shop/max_shop/a144bac7-dfa8-436f-a36a-e446b19106ca/","text":"🛍 Открыть приложение магазин","payload":"open_shop","contact_id":73412011,"type":"open_app"}`
+- runtime: synthetic `/start` webhook returned `{"ok":true}` and service logs show `POST https://platform-api.max.ru/messages?chat_id=196318594 "HTTP/1.1 200 OK"`
+
+**Notes / follow-ups:**
+- Physical click-test in MAX PC/mobile still needs human confirmation, because SSH/server tooling can verify payload and API delivery but cannot press the button inside the user's MAX client.
+- If the dynamic `contact_id` version still loads forever, next diagnostic target is MAX Mini App Bridge initialization on the web app side, not the bot URL.
+
+**Next best action:** Человек нажимает полученную кнопку `🛍 Открыть приложение магазин` в MAX на PC и mobile и подтверждает, что Mini App открывается внутри MAX.
+
+## Session Record — 2026-05-16 20:51
+
+**Agent:** Codex
+**Feature:** F14-mini-app-system-button-text-instruction
+**Status:** completed
+
+**What was done:**
+- src/bot/keyboards.py: удалена inline-кнопка `🛍 Открыть приложение магазин`; главное меню снова начинается с `📚 Каталог` и `🛒 Корзина`.
+- src/bot/handlers/start.py: удалена передача `contact_id` в `main_menu_inline_keyboard()`; в `MAIN_MENU_TEXT` добавлена заметная инструкция `**🛍 Для перехода в магазин нажмите на кнопку в левом нижнем углу экрана**`.
+- src/bot/router.py: callback `home` снова вызывает `show_main_menu()` без прокидывания `user_id`.
+- src/bot/handlers/admin.py: `admin:exit` снова вызывает `show_main_menu()` без лишнего параметра.
+- tests/test_handlers.py, tests/test_router.py, tests/test_admin.py: обновлены ожидания стабильной callback-клавиатуры без `open_app`.
+- feature_list.json: F13 помечена как `removed`; F14 добавлена как `completed`.
+
+**Evidence:**
+- pytest: 316 passed
+- ruff: exit 0
+- mypy: Success, no issues found in 38 source files
+- init.ps1: === READY ===
+- server init.sh: === READY ===
+- runtime: `systemctl restart astralaser.service` → active
+- runtime: `GET http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"18"}`
+- runtime: MAX API menu check → `instruction_present=true`, `has_open_app=false`, first buttons are `menu:catalog` and `menu:cart`
+- runtime: synthetic `/start` webhook returned `{"ok":true}` and service logs show `POST https://platform-api.max.ru/messages?chat_id=196318594 "HTTP/1.1 200 OK"`
+- runtime: Catalog/Cart server handler check → `catalog_buttons=4`, `cart_buttons=2`, cart text `Корзина пуста`
+
+**Notes / follow-ups:**
+- Старые сообщения в MAX, отправленные до деплоя, могут всё ещё содержать удалённую inline-кнопку; новое меню после `/start` приходит уже без неё.
+- Рабочий путь к Mini App теперь явно направляет пользователя к системной кнопке MAX в левом нижнем углу.
+
+**Next best action:** Человек открывает новое `/start` сообщение в MAX и визуально подтверждает, что инструкции видно, а inline Mini App button больше нет.
+
+## Session Record — 2026-05-16 21:12
+
+**Agent:** Codex
+**Feature:** F15-main-menu-marketplace-url-buttons
+**Status:** completed
+
+**What was done:**
+- src/bot/handlers/start.py: убраны literal `**` из инструкции; строка заменена на uppercase `🛍 ДЛЯ ПЕРЕХОДА В МАГАЗИН НАЖМИТЕ НА КНОПКУ В ЛЕВОМ НИЖНЕМ УГЛУ ЭКРАНА`.
+- src/bot/keyboards.py: в конец `main_menu_inline_keyboard()` добавлен ряд marketplace-кнопок `📦 Ozon` и `🟣 Wildberries`.
+- tests/test_handlers.py: добавлена проверка, что в приветствии нет `**`, инструкция uppercase, меню заканчивается marketplace row.
+- tests/test_router.py: callback `home` проверяет нижний marketplace row и отсутствие `open_app`.
+- feature_list.json: F14 evidence уточнена; F15 добавлена как `completed`.
+
+**Important MAX API note:**
+- Запрошенный `{"type":"url","text":"...","url":"..."}` был проверен на production MAX API и отклонён с `400 proto.payload: Can't deserialize body`.
+- Рабочая структура MAX для внешней ссылки: `{"type":"link","text":"...","url":"..."}`. Именно она задеплоена; MAX API вернул её в live response.
+
+**Evidence:**
+- pytest: 316 passed
+- ruff: exit 0
+- mypy: Success, no issues found in 38 source files
+- init.ps1: === READY ===
+- server init.sh: === READY ===
+- runtime: `systemctl restart astralaser.service` → active
+- runtime: `GET http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"16"}`
+- runtime MAX API menu check → `uppercase_instruction=true`, `has_asterisks=false`, `has_open_app=false`, last buttons are:
+  `{"url":"https://ozon.ru/s/astralaser","text":"📦 Ozon","type":"link"}` and `{"url":"https://www.wildberries.ru/brands/311460915-astralaser","text":"🟣 Wildberries","type":"link"}`
+- runtime synthetic `/start` webhook → `{"ok":true}` and service logs show `POST https://platform-api.max.ru/messages?chat_id=196318594 "HTTP/1.1 200 OK"`
+
+**Notes / follow-ups:**
+- Физическое открытие ссылок из MAX клиента нужно подтвердить человеком, но payload уже принят MAX API и возвращён в live response.
+
+**Next best action:** Человек открывает новое `/start` сообщение в MAX и нажимает `📦 Ozon` / `🟣 Wildberries`, чтобы подтвердить client-side переходы.
+
+## Session Record — 2026-05-16 21:34
+
+**Agent:** Codex
+**Feature:** F16-delayed-visual-mini-app-instruction
+**Status:** completed
+
+**What was done:**
+- src/bot/handlers/start.py: для consented `/start` главное меню отправляется сразу, затем через `asyncio.sleep(10)` уходит визуальная инструкция с изображением и CAPS-текстом.
+- src/bot/keyboards.py: добавлена `shop_instruction_keyboard()` с callback-кнопкой `✅ Прочитано` и payload `instruction:close`.
+- src/bot/router.py: callback `instruction:close` удаляет именно текущее сообщение инструкции через `delete_message(chat_id, message_id)`.
+- tests/test_handlers.py, tests/test_router.py: добавлены проверки задержки, payload инструкции и delete callback.
+- feature_list.json: F16 добавлена и помечена `completed`.
+
+**Evidence:**
+- pytest: 318 passed
+- ruff: exit 0
+- mypy: Success, no issues found in 38 source files
+- init.ps1: === READY ===
+- server init.sh: === READY ===
+- runtime: `systemctl restart astralaser.service` → active
+- runtime: `GET http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"33"}`
+- runtime: real MAX `/start` at 13:32:40 UTC → main menu POST `HTTP/1.1 200 OK` at 13:32:40 UTC; delayed instruction POST `HTTP/1.1 200 OK` at 13:32:51 UTC.
+- runtime: real MAX callback `instruction:close` at 13:32:53 UTC deleted message `mid.000000000bb39582019e30fd5c0f02de` with `DELETE /messages` → `HTTP/1.1 200 OK`, body `{"success":true}`.
+- runtime: direct delayed instruction smoke check → `{"webhook_status":200,"webhook_elapsed_seconds":0.01,"direct_delay_seconds":10.2,"direct_instruction_mid":"mid.000000000bb39582019e30fdb2d353a7","direct_delete_ok":true}`.
+
+**Notes / follow-ups:**
+- `asyncio.sleep(10)` is non-blocking: the webhook response returned immediately in the runtime smoke check, while the delayed instruction was scheduled/sent later.
+- The visual instruction uses the provided image URL `https://i.ibb.co/5h3WLKbZ/IMG-20260516-211207.png`.
+
+**Next best action:** Наблюдать живой MAX UI после новых `/start`; если подсказка начнёт приходить слишком часто для повторных стартов, добавить throttling по пользователю отдельной follow-up задачей.
+
+## Session Record — 2026-05-16 21:52
+
+**Agent:** Codex
+**Feature:** F13-F16 main menu UI closure
+**Status:** committed hand-off pending
+
+**What was done:**
+- Strategy finalized: broken inline `open_app` Mini App button was removed; the stable UX is now text + delayed visual instruction + the native MAX system Mini App button in the lower-left corner.
+- Marketplace links finalized: MAX `type=url` was rejected by production API with `proto.payload`, so Ozon/Wildberries buttons use the accepted `type=link` structure.
+- Main menu verified stable: Catalog/Cart → Orders/Help → Manager → Ozon/Wildberries.
+- Visual instruction verified: consented `/start` sends the menu immediately, then sends the image instruction after 10 seconds; `✅ Прочитано` deletes that instruction message.
+- Harness hand-off docs updated: `Current Verified State` in `progress.md`, `AGENTS.md`, and `NEXT_SESSION_PROMPT.md`.
+- Temporary deployment/runtime helper files were removed; no debug prints remain in `src/bot/handlers/start.py`, `src/bot/keyboards.py`, or `src/bot/router.py`.
+
+**Evidence:**
+- pytest: 318 passed, 540 warnings
+- ruff: exit 0
+- mypy: Success, no issues found in 38 source files
+- runtime: production `astralaser.service` active after restart
+- runtime: production `/health` returned `{"status":"ok","db":"ok","max_api":"ok","uptime":"33"}`
+- runtime: real MAX `/start` at 13:32:40 UTC sent main menu immediately and delayed instruction at 13:32:51 UTC
+- runtime: real MAX `instruction:close` callback at 13:32:53 UTC deleted the instruction message with `DELETE /messages` → `HTTP/1.1 200 OK`, body `{"success":true}`
+
+**Notes / follow-ups:**
+- No feature is currently `in_progress`.
+- If repeated `/start` usage makes the delayed instruction too frequent, add a separate throttle feature rather than changing the completed F16 behavior silently.
+
+**Next best action:** Commit and push the final closure, then run server `./init.sh` one last time and hand off.
 

@@ -20,6 +20,15 @@
 
 **Никакого кода до подтверждения человеком.**
 
+## Current Verified State (2026-05-16)
+
+- Main menu UI на production сервере `/opt/astralaser-max-bot-v2` стабилен.
+- Inline Mini App `open_app` button удалён: live MAX clients показывали dead-button/infinite loading, поэтому рабочая стратегия — текстовая инструкция + визуальная подсказка + системная Mini App кнопка MAX слева снизу.
+- Главное меню: `📚 Каталог` / `🛒 Корзина` → `📦 Мои заказы` / `❓ Помощь` → `💬 Менеджер` → `📦 Ozon` / `🟣 Wildberries`.
+- Marketplace buttons используют MAX `type=link`; `type=url` проверен на production MAX API и отклонён с `proto.payload`.
+- Delayed visual instruction F16: после consented `/start` меню уходит сразу, через 10 секунд отправляется image instruction с callback `instruction:close`; callback удаляет это сообщение.
+- `src/bot/webhook.py` mypy blocker по `Request` закрыт; текущий harness: pytest 318 passed, ruff clean, mypy clean, `init.ps1`/server `init.sh` READY.
+
 ## 3. Главные правила
 
 ### 3.1 Одна фича за раз

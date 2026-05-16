@@ -9,6 +9,17 @@ def main_menu_inline_keyboard() -> list[list[dict[str, Any]]]:
         [{"type": "callback", "text": "📚 Каталог", "payload": "menu:catalog"}, {"type": "callback", "text": "🛒 Корзина", "payload": "menu:cart"}],
         [{"type": "callback", "text": "📦 Мои заказы", "payload": "menu:orders"}, {"type": "callback", "text": "❓ Помощь", "payload": "menu:help"}],
         [{"type": "callback", "text": "💬 Менеджер", "payload": "menu:contact"}],
+        [
+            {"type": "link", "text": "📦 Ozon", "url": "https://ozon.ru/s/astralaser"},
+            {"type": "link", "text": "🟣 Wildberries", "url": "https://www.wildberries.ru/brands/311460915-astralaser"},
+        ],
+    ]
+
+
+def shop_instruction_keyboard() -> list[list[dict[str, Any]]]:
+    """Кнопка закрытия визуальной инструкции по Mini App."""
+    return [
+        [{"type": "callback", "text": "✅ Прочитано", "payload": "instruction:close"}],
     ]
 
 

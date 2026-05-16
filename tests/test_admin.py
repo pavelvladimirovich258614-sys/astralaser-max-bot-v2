@@ -410,7 +410,11 @@ async def test_admin_exit_returns_to_main_menu(monkeypatch):
     calls = []
 
     async def fake_show_main_menu(client, chat_id, message_id=None):
-        calls.append({"method": "show_main_menu", "chat_id": chat_id, "message_id": message_id})
+        calls.append({
+            "method": "show_main_menu",
+            "chat_id": chat_id,
+            "message_id": message_id,
+        })
 
     monkeypatch.setattr(start_handler, "show_main_menu", fake_show_main_menu)
     monkeypatch.setattr(admin_handler, "get_settings", lambda: _make_settings(["4147438"]))

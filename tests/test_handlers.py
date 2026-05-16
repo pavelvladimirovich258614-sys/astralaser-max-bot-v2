@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from src.bot.handlers import start
-from src.bot.keyboards import consent_keyboard, main_menu_inline_keyboard
+from src.bot.keyboards import consent_keyboard, main_menu_inline_keyboard, shop_instruction_keyboard
 from src.db.models import Base
 
 
@@ -53,6 +53,11 @@ class RecordingClient:
 @pytest.fixture(autouse=True)
 def set_token(monkeypatch):
     monkeypatch.setenv("MAX_BOT_TOKEN", "test_token")
+
+    async def fake_sleep(delay):
+        return None
+
+    monkeypatch.setattr(start.asyncio, "sleep", fake_sleep)
 
 
 @pytest.fixture(scope="session")
@@ -119,12 +124,20 @@ async def test_start_existing_user_with_consent_shows_menu(override_session_make
     # Второй /start — показываем меню
     await start.handle_start(client, chat_id=1, user_id=101, user_info={"name": "Test"})
 
-    assert len(client.calls) == 1
+    assert len(client.calls) == 2
     call = client.calls[0]
     assert call["method"] == "send_message"
     assert "🌟 Astralaser" in call["text"]
+    assert "🛍 ДЛЯ ПЕРЕХОДА В МАГАЗИН НАЖМИТЕ НА КНОПКУ В ЛЕВОМ НИЖНЕМ УГЛУ ЭКРАНА" in call["text"]
+    assert "**" not in call["text"]
     assert call["reply_markup"] == main_menu_inline_keyboard()
     assert call["photo_url"] == start.MAIN_MENU_PHOTO
+
+    instruction_call = client.calls[1]
+    assert instruction_call["method"] == "send_message"
+    assert instruction_call["text"] == start.SHOP_INSTRUCTION_TEXT
+    assert instruction_call["reply_markup"] == shop_instruction_keyboard()
+    assert instruction_call["photo_url"] == start.SHOP_INSTRUCTION_PHOTO
 
 
 @pytest.mark.asyncio
@@ -141,9 +154,10 @@ async def test_consent_accept_records_and_shows_menu(override_session_maker):
     call = client.calls[0]
     assert call["method"] == "edit_message"
     assert "🌟 Astralaser" in call["text"]
+    assert "🛍 ДЛЯ ПЕРЕХОДА В МАГАЗИН НАЖМИТЕ НА КНОПКУ В ЛЕВОМ НИЖНЕМ УГЛУ ЭКРАНА" in call["text"]
+    assert "**" not in call["text"]
     assert call["reply_markup"] == main_menu_inline_keyboard()
     assert call["photo_url"] == start.MAIN_MENU_PHOTO
-
 
 
 @pytest.mark.asyncio
@@ -162,6 +176,47 @@ async def test_main_menu_caption_no_url_in_text(override_session_maker):
     assert "postimg.cc" not in call["text"]
     assert "https://" not in call["text"]
     assert call["photo_url"] == start.MAIN_MENU_PHOTO
+
+
+def test_main_menu_returns_stable_callback_buttons_without_open_app():
+    """Главное меню не содержит сломанную Mini App кнопку."""
+    keyboard = main_menu_inline_keyboard()
+
+    assert len(keyboard) == 4
+    assert keyboard[0] == [
+        {"type": "callback", "text": "📚 Каталог", "payload": "menu:catalog"},
+        {"type": "callback", "text": "🛒 Корзина", "payload": "menu:cart"},
+    ]
+    assert keyboard[3] == [
+        {"type": "link", "text": "📦 Ozon", "url": "https://ozon.ru/s/astralaser"},
+        {"type": "link", "text": "🟣 Wildberries", "url": "https://www.wildberries.ru/brands/311460915-astralaser"},
+    ]
+    assert all(button["type"] != "open_app" for row in keyboard for button in row)
+
+
+@pytest.mark.asyncio
+async def test_delayed_shop_instruction_waits_10_seconds(monkeypatch):
+    delays = []
+
+    async def fake_sleep(delay):
+        delays.append(delay)
+
+    monkeypatch.setattr(start.asyncio, "sleep", fake_sleep)
+
+    client = RecordingClient()
+    await start.send_delayed_shop_instruction(client, chat_id=1)
+
+    assert delays == [10.0]
+    assert client.calls == [
+        {
+            "method": "send_message",
+            "chat_id": 1,
+            "text": start.SHOP_INSTRUCTION_TEXT,
+            "reply_markup": shop_instruction_keyboard(),
+            "photo_url": start.SHOP_INSTRUCTION_PHOTO,
+            "photo": None,
+        }
+    ]
 
 
 @pytest.mark.asyncio
