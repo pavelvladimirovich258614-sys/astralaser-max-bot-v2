@@ -24,7 +24,7 @@ def set_token(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_contact_screen_with_all_fields(monkeypatch):
-    monkeypatch.setenv("MANAGER_PHONE", "+7 903 348 92 05")
+    monkeypatch.setenv("MANAGER_PHONE", "+7 960 862 77 88")
     monkeypatch.setenv("MANAGER_VK_LINK", "https://vk.com/pk_astralazer")
     monkeypatch.setenv("MAX_MANAGER_LINK", "https://max.ru/msg/manager")
     monkeypatch.setenv("WORKING_HOURS", "пн–сб 10:00–18:00 МСК")
@@ -38,7 +38,7 @@ async def test_contact_screen_with_all_fields(monkeypatch):
     assert len(client.calls) == 1
     text = client.calls[0]["text"]
     assert "Связаться с менеджером" in text
-    assert "+7 903 348 92 05" in text
+    assert "+7 960 862 77 88" in text
     assert "vk.com/pk_astralazer" in text
     assert "max.ru/msg/manager" in text
     assert "пн–сб 10:00–18:00 МСК" in text

@@ -243,13 +243,13 @@ async def test_handle_phone_valid_moves_to_address(db_session):
     await fsm_service.set_state(db_session, user.id, "order:waiting_phone", {"customer_name": "Иван"})
 
     client = RecordingClient()
-    handled = await order_handler.handle_fsm_message(client, chat_id=1, user_id="702", message_id="m1", text="+7 903 348 92 05")
+    handled = await order_handler.handle_fsm_message(client, chat_id=1, user_id="702", message_id="m1", text="+7 960 862 77 88")
     assert handled is True
 
     async with order_handler.async_session_maker() as fresh:
         state, data = await fsm_service.get_state(fresh, user.id)
     assert state == "order:waiting_address"
-    assert data["phone"] == "+7 903 348 92 05"
+    assert data["phone"] == "+7 960 862 77 88"
     assert any("Шаг 3/4" in c["text"] for c in client.calls if c["method"] == "send_message")
 
 

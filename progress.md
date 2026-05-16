@@ -2759,3 +2759,32 @@ F05 каталог (категории, карточки, пагинация ф�
 
 **Next best action:** Commit and push the final closure, then run server `./init.sh` one last time and hand off.
 
+## Session Record — 2026-05-17 06:33
+
+**Agent:** Codex
+**Feature:** П9-update-working-phone-number
+**Status:** completed
+
+**What was done:**
+- .env: рабочий MANAGER_PHONE обновлён на +7 960 862 77 88.
+- .env.example, docs/TZ.md, docs/PROMPTS_PART2.md: обновлены контактный номер и tel-link.
+- tests/test_info.py, tests/test_order.py: ожидания обновлены под новый номер.
+- БД проверена read-only: старый рабочий номер в orders.customer_phone и user_states.data не найден.
+
+**Evidence:**
+- old phone search: no occurrences of the previous working MANAGER_PHONE or previous tel-link found outside excluded caches/venv/.git
+- new phone search: +7 960 862 77 88 and tel:+79608627788 present in expected files
+- db check: orders.customer_phone=0, user_states.data=0 for old working number
+- pytest: 318 passed, 2 warnings
+- ruff: exit 0
+- mypy: Success, no issues found in 38 source files
+- init.sh: === READY ===
+- runtime: `systemctl restart astralaser.service` → active
+- runtime: `GET http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"1"}`
+
+**Notes / follow-ups:**
+- Direct ./init.sh is not executable on the server; verification was run as `. venv/bin/activate && bash init.sh`.
+- Server-side git push failed because origin uses HTTPS and no non-interactive GitHub credentials are configured on the server; the same P9 commit is pushed from the local repository.
+
+**Next best action:** Ask a human to visually check `/contact` or the `💬 Менеджер` button in MAX and confirm the displayed phone number.
+

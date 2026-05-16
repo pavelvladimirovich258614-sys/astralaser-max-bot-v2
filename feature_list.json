@@ -272,6 +272,23 @@
         "Instruction keyboard contains ✅ Прочитано with payload instruction:close",
         "instruction:close deletes the instruction message by message_id"
       ]
+    },
+    {
+      "id": "П9",
+      "name": "Update working phone number",
+      "status": "completed",
+      "started_at": "2026-05-17",
+      "completed_at": "2026-05-17",
+      "evidence": "MANAGER_PHONE updated to +7 960 862 77 88; tel links updated to tel:+79608627788; old working number absent from code/docs/env; DB read-only check found 0 old-number rows; init.sh READY with 318 passed, ruff clean, mypy clean.",
+      "depends_on": ["F16"],
+      "acceptance_criteria": [
+        "Runtime .env MANAGER_PHONE uses +7 960 862 77 88",
+        "Documentation and example env use the new working phone number",
+        "Contact tel-links use tel:+79608627788",
+        "Old working phone number is absent from project files and checked database fields",
+        "Production harness returns === READY ===",
+        "Production service is restarted and /health returns ok"
+      ]
     }
   ]
 }
