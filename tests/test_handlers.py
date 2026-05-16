@@ -182,12 +182,15 @@ def test_main_menu_returns_stable_callback_buttons_without_open_app():
     """Главное меню не содержит сломанную Mini App кнопку."""
     keyboard = main_menu_inline_keyboard()
 
-    assert len(keyboard) == 4
+    assert len(keyboard) == 5
     assert keyboard[0] == [
         {"type": "callback", "text": "📚 Каталог", "payload": "menu:catalog"},
         {"type": "callback", "text": "🛒 Корзина", "payload": "menu:cart"},
     ]
     assert keyboard[3] == [
+        {"type": "callback", "text": "🖼 Наши работы", "payload": "gallery_works"},
+    ]
+    assert keyboard[4] == [
         {"type": "link", "text": "📦 Ozon", "url": "https://ozon.ru/s/astralaser"},
         {"type": "link", "text": "🟣 Wildberries", "url": "https://www.wildberries.ru/brands/311460915-astralaser"},
     ]

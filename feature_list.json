@@ -289,6 +289,23 @@
         "Production harness returns === READY ===",
         "Production service is restarted and /health returns ok"
       ]
+    },
+    {
+      "id": "П17",
+      "name": "Our Works gallery placeholder",
+      "status": "completed",
+      "started_at": "2026-05-17",
+      "completed_at": "2026-05-17",
+      "evidence": "Main menu contains 🖼 Наши работы callback before marketplace links; gallery_works callback shows the placeholder text with the main menu keyboard; init.ps1/init.sh READY with 319 passed, ruff clean, mypy clean; production service restarted and /health ok.",
+      "depends_on": ["П9"],
+      "acceptance_criteria": [
+        "Главное меню содержит кнопку 🖼 Наши работы",
+        "Кнопка расположена после 💬 Менеджер и до marketplace link-кнопок",
+        "Callback gallery_works показывает сообщение о разработке раздела",
+        "Сообщение-заглушка содержит главное меню для возврата к другим разделам",
+        "Harness returns === READY ===",
+        "Production service is restarted and /health returns ok"
+      ]
     }
   ]
 }

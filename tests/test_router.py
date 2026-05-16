@@ -10,7 +10,8 @@ from src.bot.handlers import cart as cart_handler
 from src.bot.handlers import catalog as catalog_handler
 from src.bot.handlers import order as order_handler
 from src.bot.handlers import start as start_handler
-from src.bot.router import UpdateRouter
+from src.bot.keyboards import main_menu_inline_keyboard
+from src.bot.router import GALLERY_WORKS_PLACEHOLDER_TEXT, UpdateRouter
 from src.db.models import Base, CartItem, Product, User
 from src.services import catalog_service, fsm_service
 from src.services.catalog_service import ProductCardDTO
@@ -167,6 +168,9 @@ async def test_router_callback_home(router):
     assert any("send_message" == c["method"] for c in client.calls)
     send_call = next(c for c in client.calls if c["method"] == "send_message")
     assert send_call["reply_markup"][0][0]["payload"] == "menu:catalog"
+    assert send_call["reply_markup"][3] == [
+        {"type": "callback", "text": "🖼 Наши работы", "payload": "gallery_works"},
+    ]
     assert send_call["reply_markup"][-1] == [
         {"type": "link", "text": "📦 Ozon", "url": "https://ozon.ru/s/astralaser"},
         {"type": "link", "text": "🟣 Wildberries", "url": "https://www.wildberries.ru/brands/311460915-astralaser"},
@@ -501,6 +505,21 @@ async def test_router_callback_menu_help(router):
     r, client = router
     await r.process(_make_callback_payload("menu:help"))
     assert any("❓ Помощь" in c.get("text", "") for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_router_callback_gallery_works_placeholder(router):
+    r, client = router
+    await r.process(_make_callback_payload("gallery_works"))
+
+    assert client.calls == [
+        {
+            "method": "edit_message",
+            "chat_id": "456",
+            "text": GALLERY_WORKS_PLACEHOLDER_TEXT,
+            "reply_markup": main_menu_inline_keyboard(),
+        },
+    ]
 
 
 @pytest.mark.asyncio

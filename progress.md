@@ -2788,3 +2788,31 @@ F05 каталог (категории, карточки, пагинация ф�
 
 **Next best action:** Ask a human to visually check `/contact` or the `💬 Менеджер` button in MAX and confirm the displayed phone number.
 
+## Session Record — 2026-05-17 06:54
+
+**Agent:** Codex
+**Feature:** П17-our-works-gallery-placeholder
+**Status:** completed
+
+**What was done:**
+- src/bot/keyboards.py: в главное меню добавлена callback-кнопка `🖼 Наши работы` с payload `gallery_works` после `💬 Менеджер` и перед Ozon/Wildberries.
+- src/bot/router.py: добавлен callback `gallery_works`, который показывает placeholder-текст раздела и прикрепляет главное меню.
+- tests/test_handlers.py, tests/test_router.py: добавлены проверки видимости кнопки, текста заглушки и клавиатуры возврата.
+- feature_list.json: П17 добавлена и помечена как `completed` по прямому DoD задачи.
+
+**Evidence:**
+- targeted tests: `tests/test_handlers.py tests/test_router.py` → 71 passed
+- pytest: 319 passed, 541 warnings
+- ruff: exit 0
+- mypy: Success, no issues found in 38 source files
+- init.ps1: === READY ===
+- server init.sh: === READY ===
+- runtime: `systemctl restart astralaser.service` → active
+- runtime: `GET http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"27"}`
+- runtime: production grep confirms `🖼 Наши работы`, `gallery_works`, and `GALLERY_WORKS_PLACEHOLDER_TEXT` are present in deployed `keyboards.py`/`router.py`
+
+**Notes / follow-ups:**
+- Это только placeholder: реальная галерея фото готовых гравировок остаётся отдельной будущей фичей.
+
+**Next best action:** Человек нажимает `🖼 Наши работы` в новом MAX меню и визуально подтверждает placeholder-текст в клиенте.
+

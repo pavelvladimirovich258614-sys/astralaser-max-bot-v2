@@ -12,11 +12,17 @@ from src.bot.handlers import info as info_handler
 from src.bot.handlers import order as order_handler
 from src.bot.handlers import start as start_handler
 from src.bot.handlers import subscription as subscription_handler
+from src.bot.keyboards import main_menu_inline_keyboard
 from src.bot.max_client import MAXClient
 from src.db.engine import async_session_maker
 from src.services import fsm_service, user_service
 
 logger = logging.getLogger(__name__)
+
+GALLERY_WORKS_PLACEHOLDER_TEXT = (
+    "✨ Раздел с нашими работами сейчас находится в разработке. "
+    "Совсем скоро мы представим вам лучшие примеры гравировок!"
+)
 
 
 class UpdateRouter:
@@ -165,6 +171,15 @@ class UpdateRouter:
 
         if data == "menu:orders":
             await order_handler.show_my_orders(self.client, chat_id, user_id, message_id)
+            return
+
+        if data == "gallery_works":
+            await self.client.edit_message(
+                chat_id,
+                message_id,
+                GALLERY_WORKS_PLACEHOLDER_TEXT,
+                reply_markup=main_menu_inline_keyboard(),
+            )
             return
 
         if data == "sub:check":
