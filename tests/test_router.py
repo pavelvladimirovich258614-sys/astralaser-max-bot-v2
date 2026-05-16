@@ -167,11 +167,18 @@ async def test_router_callback_home(router):
     assert any("delete_message" == c["method"] for c in client.calls)
     assert any("send_message" == c["method"] for c in client.calls)
     send_call = next(c for c in client.calls if c["method"] == "send_message")
-    assert send_call["reply_markup"][0][0]["payload"] == "menu:catalog"
-    assert send_call["reply_markup"][3] == [
+    assert send_call["reply_markup"][0] == [
+        {
+            "type": "link",
+            "text": "📖 Инструкция по заказу",
+            "url": "https://telegra.ph/Kak-sdelat-zakaz-v-AstraLaser-05-16",
+        },
+    ]
+    assert send_call["reply_markup"][1][0]["payload"] == "menu:catalog"
+    assert send_call["reply_markup"][4] == [
         {"type": "callback", "text": "🖼 Наши работы", "payload": "gallery_works"},
     ]
-    assert send_call["reply_markup"][4] == [
+    assert send_call["reply_markup"][5] == [
         {"type": "link", "text": "📍 Пункты выдачи СДЭК", "url": "https://www.cdek.ru/ru/offices/cdek"},
     ]
     assert send_call["reply_markup"][-1] == [

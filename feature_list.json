@@ -344,6 +344,23 @@
         "Harness returns === READY ===",
         "Production service is restarted and /health returns ok"
       ]
+    },
+    {
+      "id": "П14",
+      "name": "Order guide Telegraph link",
+      "status": "completed",
+      "started_at": "2026-05-17",
+      "completed_at": "2026-05-17",
+      "evidence": "Main menu first row contains 📖 Инструкция по заказу with MAX type=link and URL https://telegra.ph/Kak-sdelat-zakaz-v-AstraLaser-05-16; init.ps1 READY with 330 passed, server init.sh READY with 330 passed; astralaser.service active; /health ok.",
+      "depends_on": ["П15"],
+      "acceptance_criteria": [
+        "Главное меню содержит link-кнопку 📖 Инструкция по заказу",
+        "Кнопка использует MAX type=link",
+        "Кнопка ведёт на https://telegra.ph/Kak-sdelat-zakaz-v-AstraLaser-05-16",
+        "Кнопка находится первой строкой главного меню",
+        "Harness returns === READY ===",
+        "Production service is restarted and /health returns ok"
+      ]
     }
   ]
 }

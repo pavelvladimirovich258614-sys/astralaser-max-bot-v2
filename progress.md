@@ -2875,3 +2875,30 @@ F05 каталог (категории, карточки, пагинация ф�
 
 **Next best action:** Человек открывает `📦 Мои заказы` в MAX на аккаунте с pending-заказом и визуально подтверждает путь детали → отмена → подтверждение.
 
+## Session Record — 2026-05-17 07:32
+
+**Agent:** Codex
+**Feature:** П14-order-guide-telegraph-link
+**Status:** completed
+
+**What was done:**
+- src/bot/keyboards.py: первой строкой `main_menu_inline_keyboard()` добавлена link-кнопка `📖 Инструкция по заказу` → `https://telegra.ph/Kak-sdelat-zakaz-v-AstraLaser-05-16`.
+- tests/test_handlers.py, tests/test_router.py: обновлены проверки структуры главного меню и callback `home`, чтобы фиксировать Telegraph-кнопку как первый ряд.
+- feature_list.json: П14 добавлена и помечена как `completed` по прямому DoD задачи.
+
+**Evidence:**
+- targeted tests: `tests/test_handlers.py tests/test_router.py` → 74 passed
+- pytest: 330 passed, 582 warnings
+- ruff: exit 0
+- mypy: Success, no issues found in 38 source files
+- init.ps1: === READY ===
+- server init.sh: === READY === (330 passed, ruff clean, mypy clean)
+- runtime: `systemctl restart astralaser.service` → active; `/health` → `{"status":"ok","db":"ok","max_api":"ok"}`
+- production grep: `src/bot/keyboards.py` contains `📖 Инструкция по заказу` and `https://telegra.ph/Kak-sdelat-zakaz-v-AstraLaser-05-16`
+
+**Notes / follow-ups:**
+- Кнопка информационная: `type=link`, callback/handler не нужен, данные обратно в бота не отправляются.
+- Client-side открытие Telegraph из MAX требует ручного нажатия в живом клиенте; payload структуры покрыт тестами, deployed keyboard подтвержден на production файлах.
+
+**Next best action:** Ручно нажать `📖 Инструкция по заказу` в живом MAX-клиенте и убедиться, что открывается Telegraph-страница.
+

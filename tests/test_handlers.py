@@ -182,18 +182,25 @@ def test_main_menu_returns_stable_callback_buttons_without_open_app():
     """Главное меню не содержит сломанную Mini App кнопку."""
     keyboard = main_menu_inline_keyboard()
 
-    assert len(keyboard) == 6
+    assert len(keyboard) == 7
     assert keyboard[0] == [
+        {
+            "type": "link",
+            "text": "📖 Инструкция по заказу",
+            "url": "https://telegra.ph/Kak-sdelat-zakaz-v-AstraLaser-05-16",
+        },
+    ]
+    assert keyboard[1] == [
         {"type": "callback", "text": "📚 Каталог", "payload": "menu:catalog"},
         {"type": "callback", "text": "🛒 Корзина", "payload": "menu:cart"},
     ]
-    assert keyboard[3] == [
+    assert keyboard[4] == [
         {"type": "callback", "text": "🖼 Наши работы", "payload": "gallery_works"},
     ]
-    assert keyboard[4] == [
+    assert keyboard[5] == [
         {"type": "link", "text": "📍 Пункты выдачи СДЭК", "url": "https://www.cdek.ru/ru/offices/cdek"},
     ]
-    assert keyboard[5] == [
+    assert keyboard[6] == [
         {"type": "link", "text": "📦 Ozon", "url": "https://ozon.ru/s/astralaser"},
         {"type": "link", "text": "🟣 Wildberries", "url": "https://www.wildberries.ru/brands/311460915-astralaser"},
     ]
