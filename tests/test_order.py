@@ -687,7 +687,7 @@ async def test_confirm_order_shows_confirmation_with_order_id(db_session, monkey
     monkeypatch.setattr(
         order_handler,
         "get_settings",
-        lambda: type("S", (), {"admin_chat_ids_list": []})(),
+        lambda: type("S", (), {"admin_chat_ids_list": [], "admin_ids_list": []})(),
     )
     user = User(max_user_id="904", full_name="Test")
     db_session.add(user)
@@ -763,7 +763,7 @@ async def test_confirm_order_no_notification_when_no_admins(db_session, monkeypa
     monkeypatch.setattr(
         order_handler,
         "get_settings",
-        lambda: type("S", (), {"admin_chat_ids_list": []})(),
+        lambda: type("S", (), {"admin_chat_ids_list": [], "admin_ids_list": []})(),
     )
     user = User(max_user_id="907", full_name="Test")
     db_session.add(user)
@@ -799,8 +799,8 @@ async def test_confirm_order_no_notification_when_no_admins(db_session, monkeypa
 # ---------------------------------------------------------------------------
 
 
-def _make_settings(admin_chat_ids: list[str]) -> object:
-    return type("S", (), {"admin_chat_ids_list": admin_chat_ids})()
+def _make_settings(admin_chat_ids: list[str], admin_ids: list[str] | None = None) -> object:
+    return type("S", (), {"admin_chat_ids_list": admin_chat_ids, "admin_ids_list": admin_ids or []})()
 
 
 async def _setup_order_for_confirm(db_session, max_user_id="910"):
@@ -865,6 +865,23 @@ async def test_confirm_order_sends_notification_to_admins(db_session, monkeypatc
     assert len(admin_calls) == 2
     chat_ids = {c["chat_id"] for c in admin_calls}
     assert chat_ids == {"196318594", "196318595"}
+
+
+@pytest.mark.asyncio
+async def test_confirm_order_notifies_admin_user_chat_id_from_admin_ids(db_session, monkeypatch):
+    """Новый заказ уведомляет админа из MAX_ADMIN_USER_IDS через сохранённый max_chat_id."""
+    monkeypatch.setattr(order_handler, "get_settings", lambda: _make_settings([], ["4147438"]))
+    await _setup_order_for_confirm(db_session, max_user_id="913")
+    admin = User(max_user_id="4147438", full_name="Admin", max_chat_id="admin_chat_4147438")
+    db_session.add(admin)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await order_handler.confirm_order(client, chat_id=1, user_id="913", message_id="msg_1")
+
+    admin_calls = [c for c in client.calls if c["method"] == "send_message" and c["chat_id"] == "admin_chat_4147438"]
+    assert len(admin_calls) == 1
+    assert "Новый заказ" in admin_calls[0]["text"]
 
 
 @pytest.mark.asyncio
@@ -1093,6 +1110,24 @@ async def test_order_cancel_execute_updates_status_and_notifies_admin(db_session
     assert f"отменил заказ №{order.id}" in admin_calls[0]["text"]
     assert user.max_user_id in admin_calls[0]["text"]
     assert any("успешно отменен" in c["text"] for c in client.calls if c["method"] == "edit_message")
+
+
+@pytest.mark.asyncio
+async def test_order_cancel_execute_notifies_admin_user_chat_id_from_admin_ids(db_session, monkeypatch):
+    """Отмена заказа уведомляет админа из MAX_ADMIN_USER_IDS через сохранённый max_chat_id."""
+    user, order = await _create_order_for_user(db_session, max_user_id="1113", status="pending")
+    admin = User(max_user_id="4147438", full_name="Admin", max_chat_id="admin_chat_4147438")
+    db_session.add(admin)
+    await db_session.commit()
+    monkeypatch.setattr(order_handler, "get_settings", lambda: _make_settings([], ["4147438"]))
+
+    client = RecordingClient()
+    await order_handler.execute_order_cancellation(client, chat_id=1, user_id="1113", order_id=order.id, message_id="msg_1")
+
+    admin_calls = [c for c in client.calls if c["method"] == "send_message" and c["chat_id"] == "admin_chat_4147438"]
+    assert len(admin_calls) == 1
+    assert f"отменил заказ №{order.id}" in admin_calls[0]["text"]
+    assert user.max_user_id in admin_calls[0]["text"]
 
 
 @pytest.mark.asyncio

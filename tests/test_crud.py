@@ -8,7 +8,13 @@ from src.db.crud.category import get_active_categories, get_by_slug
 from src.db.crud.order import create_order, get_by_user
 from src.db.crud.order import get_by_id as get_order_by_id
 from src.db.crud.product import get_by_category
-from src.db.crud.user import create_user, get_user_by_max_id, update_consent, update_max_chat_id
+from src.db.crud.user import (
+    create_user,
+    get_user_by_max_id,
+    get_users_by_max_ids,
+    update_consent,
+    update_max_chat_id,
+)
 from src.db.crud.user_state import clear_state, get_state, set_state
 from src.db.models import Base, Category, Product
 
@@ -52,6 +58,17 @@ async def test_user_create_and_get(db_session: AsyncSession):
 async def test_user_not_found(db_session: AsyncSession):
     found = await get_user_by_max_id(db_session, "nonexistent")
     assert found is None
+
+
+@pytest.mark.asyncio
+async def test_get_users_by_max_ids(db_session: AsyncSession):
+    user1 = await create_user(db_session, max_user_id="admin_1", max_chat_id="chat_1")
+    user2 = await create_user(db_session, max_user_id="admin_2", max_chat_id="chat_2")
+    await create_user(db_session, max_user_id="regular", max_chat_id="chat_3")
+
+    found = await get_users_by_max_ids(db_session, ["admin_2", "missing", "admin_1"])
+
+    assert found == [user1, user2]
 
 
 @pytest.mark.asyncio

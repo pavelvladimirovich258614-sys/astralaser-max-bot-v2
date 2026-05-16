@@ -2902,3 +2902,35 @@ F05 каталог (категории, карточки, пагинация ф�
 
 **Next best action:** Ручно нажать `📖 Инструкция по заказу` в живом MAX-клиенте и убедиться, что открывается Telegraph-страница.
 
+## Session Record — 2026-05-17 07:45
+
+**Agent:** Codex
+**Feature:** П18-grant-admin-privileges-4147438
+**Status:** completed
+
+**What was done:**
+- Production `.env`: подтверждено, что `MAX_ADMIN_USER_IDS` содержит `4147438`; `.env.example` уже содержит этот ID.
+- Production DB: запись `users.max_user_id = 4147438` уже существует; в текущей схеме `users` нет колонки `role/status`, поэтому доступ к админке остаётся через `MAX_ADMIN_USER_IDS`.
+- `src/db/crud/user.py`: добавлен `get_users_by_max_ids()` для выборки админов по MAX user IDs.
+- `src/services/order_service.py`: добавлен `get_admin_notification_chat_ids()` — объединяет явные `MAX_ADMIN_CHAT_IDS` и сохранённые `max_chat_id` пользователей из `MAX_ADMIN_USER_IDS` без дублей.
+- `src/bot/handlers/order.py`: уведомления о новых заказах и пользовательских отменах переведены на общий resolver admin notification chat IDs.
+- `tests/test_crud.py`, `tests/test_order.py`: добавлены проверки поиска пользователей по MAX IDs и доставки уведомлений админу `4147438` через сохранённый `max_chat_id`.
+- feature_list.json: П18 добавлена и помечена как `completed` по прямому DoD задачи.
+
+**Evidence:**
+- targeted tests: `tests/test_crud.py tests/test_order.py` → 63 passed
+- pytest: 333 passed, 598 warnings
+- ruff: exit 0
+- mypy: Success, no issues found in 38 source files
+- init.ps1: === READY ===
+- server init.sh: === READY === (333 passed, ruff clean, mypy clean)
+- runtime: `systemctl restart astralaser.service` → active; `/health` → `{"status":"ok","db":"ok","max_api":"ok"}`
+- production env: `MAX_ADMIN_USER_IDS=73412011,4147438`
+- production DB: `users.max_user_id=4147438` exists; `max_chat_id` currently absent; `role/status` column absent by schema
+
+**Notes / follow-ups:**
+- `/admin` access for `4147438` is active immediately because admin access checks use `MAX_ADMIN_USER_IDS`.
+- System notifications require a MAX `chat_id`; the bot now auto-resolves it from `users.max_chat_id` for admins in `MAX_ADMIN_USER_IDS`. Since production DB currently has no `max_chat_id` for `4147438`, the client must send `/start` or `/admin` once so the router captures and stores it. After that, new order and cancellation notifications will route to this admin automatically.
+
+**Next best action:** Попросить пользователя `4147438` отправить боту `/admin` в MAX, затем при необходимости проверить, что `users.max_chat_id` заполнен.
+

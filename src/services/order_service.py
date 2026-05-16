@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.crud import order as order_crud
+from src.db.crud import user as user_crud
 from src.db.models import Order
 from src.services.cart_service import CartViewDTO
 
@@ -45,6 +47,31 @@ async def get_user_orders(session: AsyncSession, user_id: int) -> list[Order]:
     """Получить последние 5 заказов пользователя (сортировка по убыванию id)."""
     orders = await order_crud.get_by_user(session, user_id)
     return orders[:5]
+
+
+async def get_admin_notification_chat_ids(
+    session: AsyncSession,
+    configured_chat_ids: Sequence[str],
+    admin_user_ids: Sequence[str],
+) -> list[str]:
+    """Собрать chat_id для системных уведомлений из явного конфига и admin user IDs."""
+    chat_ids: list[str] = []
+    seen: set[str] = set()
+
+    for chat_id in configured_chat_ids:
+        cleaned = str(chat_id).strip()
+        if cleaned and cleaned not in seen:
+            chat_ids.append(cleaned)
+            seen.add(cleaned)
+
+    admin_users = await user_crud.get_users_by_max_ids(session, admin_user_ids)
+    for user in admin_users:
+        cleaned = user.max_chat_id.strip() if user.max_chat_id else ""
+        if cleaned and cleaned not in seen:
+            chat_ids.append(cleaned)
+            seen.add(cleaned)
+
+    return chat_ids
 
 
 async def get_user_order_detail(session: AsyncSession, user_id: int, order_id: int) -> Order | None:

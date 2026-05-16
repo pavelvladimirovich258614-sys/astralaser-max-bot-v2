@@ -211,7 +211,12 @@ async def confirm_order(
                 delivery_address=data.get("address", ""),
                 notes=data.get("notes"),
             )
-            admin_chat_ids = get_settings().admin_chat_ids_list
+            settings = get_settings()
+            admin_chat_ids = await order_service.get_admin_notification_chat_ids(
+                session,
+                configured_chat_ids=settings.admin_chat_ids_list,
+                admin_user_ids=settings.admin_ids_list,
+            )
             if not admin_chat_ids:
                 logger.info("no admin chat IDs configured, skipping manager notifications")
             else:
@@ -445,6 +450,7 @@ async def execute_order_cancellation(
 ) -> None:
     """Отменить pending-заказ пользователя и уведомить администраторов."""
     admin_notification: str | None = None
+    admin_chat_ids: list[str] = []
     async with async_session_maker() as session:
         user = await user_service.get_or_create_user(session, max_user_id=str(user_id))
         await session.commit()
@@ -467,12 +473,18 @@ async def execute_order_cancellation(
                 max_user_id=user.max_user_id,
                 user_name=user.full_name,
             )
+            settings = get_settings()
+            admin_chat_ids = await order_service.get_admin_notification_chat_ids(
+                session,
+                configured_chat_ids=settings.admin_chat_ids_list,
+                admin_user_ids=settings.admin_ids_list,
+            )
         else:
             text = "⚠️ Не удалось отменить заказ. Попробуйте ещё раз или напишите менеджеру."
             keyboard = order_confirmed_keyboard()
 
     if admin_notification:
-        for admin_chat_id in get_settings().admin_chat_ids_list:
+        for admin_chat_id in admin_chat_ids:
             try:
                 await client.send_message(admin_chat_id, admin_notification)
             except Exception:

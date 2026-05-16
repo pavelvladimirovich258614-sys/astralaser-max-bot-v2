@@ -361,6 +361,23 @@
         "Harness returns === READY ===",
         "Production service is restarted and /health returns ok"
       ]
+    },
+    {
+      "id": "П18",
+      "name": "Grant administrator privileges to MAX user 4147438",
+      "status": "completed",
+      "started_at": "2026-05-17",
+      "completed_at": "2026-05-17",
+      "evidence": "Production MAX_ADMIN_USER_IDS contains 4147438; users row for 4147438 exists; current users schema has no role/status column; admin access is controlled by MAX_ADMIN_USER_IDS; new order and cancellation notifications now resolve saved max_chat_id for all MAX_ADMIN_USER_IDS in addition to MAX_ADMIN_CHAT_IDS; init.ps1/init.sh READY with 333 passed; production service restarted and /health ok.",
+      "depends_on": ["П14"],
+      "acceptance_criteria": [
+        "MAX_ADMIN_USER_IDS contains 4147438",
+        "Production users table contains max_user_id 4147438",
+        "Admin panel access checks include 4147438 through MAX_ADMIN_USER_IDS",
+        "Order and cancellation notifications resolve admin user max_chat_id values from MAX_ADMIN_USER_IDS",
+        "Harness returns === READY ===",
+        "Production service is restarted and /health returns ok"
+      ]
     }
   ]
 }

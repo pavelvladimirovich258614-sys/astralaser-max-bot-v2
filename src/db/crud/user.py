@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,6 +9,14 @@ from src.db.models import User
 async def get_user_by_max_id(session: AsyncSession, max_user_id: str) -> User | None:
     result = await session.execute(select(User).where(User.max_user_id == max_user_id))
     return result.scalar_one_or_none()
+
+
+async def get_users_by_max_ids(session: AsyncSession, max_user_ids: Sequence[str]) -> list[User]:
+    normalized_ids = [str(max_user_id).strip() for max_user_id in max_user_ids if str(max_user_id).strip()]
+    if not normalized_ids:
+        return []
+    result = await session.execute(select(User).where(User.max_user_id.in_(normalized_ids)).order_by(User.id.asc()))
+    return list(result.scalars().all())
 
 
 async def create_user(
