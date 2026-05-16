@@ -323,6 +323,27 @@
         "Harness returns === READY ===",
         "Production service is restarted and /health returns ok"
       ]
+    },
+    {
+      "id": "П15",
+      "name": "User order cancellation flow",
+      "status": "completed",
+      "started_at": "2026-05-17",
+      "completed_at": "2026-05-17",
+      "evidence": "My Orders list now exposes order_details callbacks; pending order details show cancel flow; confirmed/completed/foreign orders cannot be cancelled; successful cancellation updates status to cancelled and notifies admins; init.ps1/init.sh READY with 330 passed, ruff clean, mypy clean; production service restarted and /health ok.",
+      "depends_on": ["П5"],
+      "acceptance_criteria": [
+        "Мои заказы показывает каждый заказ callback-кнопкой order_details:<id>",
+        "Детали заказа показывают состав, сумму, статус, доставку и комментарий",
+        "Pending-заказ содержит кнопку ❌ Отменить заказ",
+        "Confirmed/completed/cancelled-заказы не содержат пользовательскую кнопку отмены",
+        "Подтверждение отмены содержит Да/Нет",
+        "Исполнение отмены проверяет владельца заказа",
+        "Успешная отмена обновляет статус заказа на cancelled",
+        "Администраторы получают уведомление об отмене заказа",
+        "Harness returns === READY ===",
+        "Production service is restarted and /health returns ok"
+      ]
     }
   ]
 }

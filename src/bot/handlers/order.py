@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import Any
 
 from src.bot.handlers import cart as cart_handler
 from src.bot.keyboards import (
@@ -11,6 +12,9 @@ from src.bot.keyboards import (
     order_ready_keyboard,
     order_summary_keyboard,
     subscription_gate_keyboard,
+    user_order_cancel_confirm_keyboard,
+    user_order_detail_keyboard,
+    user_orders_keyboard,
 )
 from src.bot.max_client import MAXClient
 from src.config import get_settings
@@ -359,14 +363,120 @@ async def show_my_orders(
             text = "📦 Мои заказы\n\nУ вас пока нет заказов."
             keyboard = empty_cart_keyboard()
         else:
-            lines = ["📦 Мои заказы"]
+            lines = ["📦 Мои заказы", "", "Выберите заказ, чтобы посмотреть детали:"]
             for order in orders:
                 status_text = _STATUS_LABELS.get(order.status, order.status)
                 date_str = order.created_at.strftime("%d.%m.%Y") if order.created_at else "—"
                 lines.append(f"\n#{order.id} — {status_text}")
                 lines.append(f"Итого: {order.total_amount} ₽ | {date_str}")
             text = "\n".join(lines)
+            keyboard = user_orders_keyboard(orders)
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)
+
+
+async def show_order_details(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    order_id: int,
+    message_id: str | None = None,
+) -> None:
+    """Показать детали заказа пользователя с кнопкой отмены для pending."""
+    async with async_session_maker() as session:
+        user = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        order = await order_service.get_user_order_detail(session, user.id, order_id)
+
+        if order is None:
+            text = "📦 Заказ не найден.\n\nПроверьте список ваших заказов."
             keyboard = order_confirmed_keyboard()
+        else:
+            text = _format_order_details(order)
+            keyboard = user_order_detail_keyboard(order.id, order.status)
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)
+
+
+async def confirm_order_cancellation(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    order_id: int,
+    message_id: str | None = None,
+) -> None:
+    """Показать подтверждение отмены заказа."""
+    async with async_session_maker() as session:
+        user = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        order = await order_service.get_user_order_detail(session, user.id, order_id)
+
+        if order is None:
+            text = "📦 Заказ не найден.\n\nПроверьте список ваших заказов."
+            keyboard = order_confirmed_keyboard()
+        elif order.status != "pending":
+            text = (
+                f"⚠️ Заказ №{order.id} уже нельзя отменить через бот.\n\n"
+                "Если нужно изменить заказ, напишите менеджеру."
+            )
+            keyboard = user_order_detail_keyboard(order.id, order.status)
+        else:
+            text = "Вы уверены, что хотите отменить этот заказ?"
+            keyboard = user_order_cancel_confirm_keyboard(order.id)
+
+    if message_id:
+        await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
+    else:
+        await client.send_message(chat_id, text, reply_markup=keyboard)
+
+
+async def execute_order_cancellation(
+    client: MAXClient,
+    chat_id: int | str,
+    user_id: int | str,
+    order_id: int,
+    message_id: str | None = None,
+) -> None:
+    """Отменить pending-заказ пользователя и уведомить администраторов."""
+    admin_notification: str | None = None
+    async with async_session_maker() as session:
+        user = await user_service.get_or_create_user(session, max_user_id=str(user_id))
+        await session.commit()
+        result = await order_service.cancel_user_order(session, user.id, order_id)
+
+        if result.reason == "not_found":
+            text = "📦 Заказ не найден.\n\nПроверьте список ваших заказов."
+            keyboard = order_confirmed_keyboard()
+        elif result.reason == "not_cancelable" and result.order is not None:
+            text = (
+                f"⚠️ Заказ №{result.order.id} уже нельзя отменить через бот.\n\n"
+                "Если нужно изменить заказ, напишите менеджеру."
+            )
+            keyboard = user_order_detail_keyboard(result.order.id, result.order.status)
+        elif result.cancelled and result.order is not None:
+            text = f"Ваш заказ №{result.order.id} был успешно отменен"
+            keyboard = user_order_detail_keyboard(result.order.id, result.order.status)
+            admin_notification = order_service.format_order_cancellation_notification(
+                order_id=result.order.id,
+                max_user_id=user.max_user_id,
+                user_name=user.full_name,
+            )
+        else:
+            text = "⚠️ Не удалось отменить заказ. Попробуйте ещё раз или напишите менеджеру."
+            keyboard = order_confirmed_keyboard()
+
+    if admin_notification:
+        for admin_chat_id in get_settings().admin_chat_ids_list:
+            try:
+                await client.send_message(admin_chat_id, admin_notification)
+            except Exception:
+                logger.warning("failed to notify admin chat %s about order cancellation", admin_chat_id, exc_info=True)
 
     if message_id:
         await client.edit_message(chat_id, message_id, text, reply_markup=keyboard)
@@ -377,4 +487,35 @@ async def show_my_orders(
 def _validate_address(text: str) -> bool:
     stripped = text.strip()
     return bool(stripped) and 5 <= len(stripped) <= 300
+
+
+def _format_order_details(order: Any) -> str:
+    status = order.status
+    created_at = order.created_at
+    date_str = created_at.strftime("%d.%m.%Y") if created_at else "—"
+    lines = [
+        f"📦 Заказ №{order.id}",
+        f"Статус: {_STATUS_LABELS.get(status, status)}",
+        f"Дата: {date_str}",
+        "",
+        "Товары:",
+    ]
+    items = order.items
+    for idx, item in enumerate(items, 1):
+        line_total = item.price_snapshot * item.quantity
+        lines.append(f"{idx}. {item.product_title_snapshot}")
+        lines.append(f"{item.price_snapshot} ₽ × {item.quantity} = {line_total} ₽")
+    if not items:
+        lines.append("—")
+    lines.extend(
+        [
+            "",
+            f"Итого: {order.total_amount} ₽",
+            "",
+            "Доставка и комментарий:",
+            f"📍 {order.delivery_address}",
+            f"✏️ {order.notes or '—'}",
+        ]
+    )
+    return "\n".join(lines)
 

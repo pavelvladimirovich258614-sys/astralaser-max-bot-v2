@@ -820,6 +820,35 @@ async def _setup_order_for_confirm(db_session, max_user_id="910"):
     return user, product
 
 
+async def _create_order_for_user(db_session, max_user_id="1100", status="pending"):
+    user = User(max_user_id=max_user_id, full_name="Test User")
+    db_session.add(user)
+    await db_session.flush()
+    product = Product(category_id=1, title="Кулон", description="D", price=500, cover_url="url")
+    db_session.add(product)
+    await db_session.flush()
+    order = await order_crud.create_order(
+        session=db_session,
+        user_id=user.id,
+        customer_name="Иван Иванов",
+        customer_phone="+7 960 862 77 88",
+        delivery_address="ПВЗ СДЭК, Москва",
+        total_amount=1000,
+        notes="Гравировка",
+        items=[
+            {
+                "product_id": product.id,
+                "product_title_snapshot": product.title,
+                "price_snapshot": 500,
+                "quantity": 2,
+            }
+        ],
+    )
+    if status != "pending":
+        order = await order_crud.update_status(db_session, order, status)
+    return user, order
+
+
 @pytest.mark.asyncio
 async def test_confirm_order_sends_notification_to_admins(db_session, monkeypatch):
     """При двух admin IDs отправляются уведомления обоим."""
@@ -956,6 +985,7 @@ async def test_show_my_orders_with_orders_shows_compact_list(db_session):
     assert "#1" in call["text"]
     assert "250 ₽" in call["text"]
     assert "⏳ Ожидает подтверждения" in call["text"]
+    assert any(b["payload"] == "order_details:1" for row in call["reply_markup"] for b in row)
 
 
 @pytest.mark.asyncio
@@ -971,3 +1001,132 @@ async def test_show_my_orders_uses_send_message_without_message_id(db_session):
     assert len(client.calls) == 1
     assert client.calls[0]["method"] == "send_message"
     assert "У вас пока нет заказов" in client.calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_show_order_details_pending_has_cancel_button(db_session):
+    """Pending-заказ открывается в деталях и содержит кнопку отмены."""
+    _, order = await _create_order_for_user(db_session, max_user_id="1103", status="pending")
+
+    client = RecordingClient()
+    await order_handler.show_order_details(client, chat_id=1, user_id="1103", order_id=order.id, message_id="msg_1")
+
+    call = client.calls[0]
+    assert call["method"] == "edit_message"
+    assert f"Заказ №{order.id}" in call["text"]
+    assert "Кулон" in call["text"]
+    assert "Итого: 1000 ₽" in call["text"]
+    assert any(b["payload"] == f"order_cancel_confirm:{order.id}" for row in call["reply_markup"] for b in row)
+
+
+@pytest.mark.asyncio
+async def test_show_order_details_completed_hides_cancel_button(db_session):
+    """Завершённый заказ нельзя отменить: кнопки отмены нет."""
+    _, order = await _create_order_for_user(db_session, max_user_id="1104", status="completed")
+
+    client = RecordingClient()
+    await order_handler.show_order_details(client, chat_id=1, user_id="1104", order_id=order.id, message_id="msg_1")
+
+    payloads = [b["payload"] for row in client.calls[0]["reply_markup"] for b in row]
+    assert f"order_cancel_confirm:{order.id}" not in payloads
+    assert "🏁 Завершён" in client.calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_show_order_details_rejects_foreign_order(db_session):
+    """Пользователь не может открыть чужой заказ."""
+    _, order = await _create_order_for_user(db_session, max_user_id="1105", status="pending")
+    other = User(max_user_id="1106", full_name="Other")
+    db_session.add(other)
+    await db_session.commit()
+
+    client = RecordingClient()
+    await order_handler.show_order_details(client, chat_id=1, user_id="1106", order_id=order.id, message_id="msg_1")
+
+    assert "Заказ не найден" in client.calls[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_order_cancel_confirm_pending_shows_yes_no_buttons(db_session):
+    """Подтверждение отмены pending-заказа показывает Да/Нет."""
+    _, order = await _create_order_for_user(db_session, max_user_id="1107", status="pending")
+
+    client = RecordingClient()
+    await order_handler.confirm_order_cancellation(client, chat_id=1, user_id="1107", order_id=order.id, message_id="msg_1")
+
+    call = client.calls[0]
+    assert "Вы уверены, что хотите отменить этот заказ?" in call["text"]
+    payloads = [b["payload"] for row in call["reply_markup"] for b in row]
+    assert f"order_cancel_execute:{order.id}" in payloads
+    assert f"order_details:{order.id}" in payloads
+
+
+@pytest.mark.asyncio
+async def test_order_cancel_confirm_confirmed_is_forbidden(db_session):
+    """Подтверждённый заказ нельзя отменить через пользовательский flow."""
+    _, order = await _create_order_for_user(db_session, max_user_id="1108", status="confirmed")
+
+    client = RecordingClient()
+    await order_handler.confirm_order_cancellation(client, chat_id=1, user_id="1108", order_id=order.id, message_id="msg_1")
+
+    assert "уже нельзя отменить" in client.calls[0]["text"]
+    payloads = [b["payload"] for row in client.calls[0]["reply_markup"] for b in row]
+    assert f"order_cancel_execute:{order.id}" not in payloads
+
+
+@pytest.mark.asyncio
+async def test_order_cancel_execute_updates_status_and_notifies_admin(db_session, monkeypatch):
+    """Успешная отмена меняет статус на cancelled и уведомляет администратора."""
+    user, order = await _create_order_for_user(db_session, max_user_id="1109", status="pending")
+    monkeypatch.setattr(order_handler, "get_settings", lambda: _make_settings(["admin_chat"]))
+
+    client = RecordingClient()
+    await order_handler.execute_order_cancellation(client, chat_id=1, user_id="1109", order_id=order.id, message_id="msg_1")
+
+    async with order_handler.async_session_maker() as fresh:
+        updated = await order_crud.get_by_id(fresh, order.id)
+    assert updated is not None
+    assert updated.status == "cancelled"
+
+    admin_calls = [c for c in client.calls if c["method"] == "send_message" and c["chat_id"] == "admin_chat"]
+    assert len(admin_calls) == 1
+    assert f"отменил заказ №{order.id}" in admin_calls[0]["text"]
+    assert user.max_user_id in admin_calls[0]["text"]
+    assert any("успешно отменен" in c["text"] for c in client.calls if c["method"] == "edit_message")
+
+
+@pytest.mark.asyncio
+async def test_order_cancel_execute_does_not_cancel_foreign_order(db_session, monkeypatch):
+    """Чужой заказ не отменяется и админ не уведомляется."""
+    _, order = await _create_order_for_user(db_session, max_user_id="1110", status="pending")
+    other = User(max_user_id="1111", full_name="Other")
+    db_session.add(other)
+    await db_session.commit()
+    monkeypatch.setattr(order_handler, "get_settings", lambda: _make_settings(["admin_chat"]))
+
+    client = RecordingClient()
+    await order_handler.execute_order_cancellation(client, chat_id=1, user_id="1111", order_id=order.id, message_id="msg_1")
+
+    async with order_handler.async_session_maker() as fresh:
+        updated = await order_crud.get_by_id(fresh, order.id)
+    assert updated is not None
+    assert updated.status == "pending"
+    assert "Заказ не найден" in client.calls[0]["text"]
+    assert not any(c["method"] == "send_message" and c["chat_id"] == "admin_chat" for c in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_order_cancel_execute_does_not_cancel_confirmed_order(db_session, monkeypatch):
+    """Подтверждённый заказ не переводится в cancelled."""
+    _, order = await _create_order_for_user(db_session, max_user_id="1112", status="confirmed")
+    monkeypatch.setattr(order_handler, "get_settings", lambda: _make_settings(["admin_chat"]))
+
+    client = RecordingClient()
+    await order_handler.execute_order_cancellation(client, chat_id=1, user_id="1112", order_id=order.id, message_id="msg_1")
+
+    async with order_handler.async_session_maker() as fresh:
+        updated = await order_crud.get_by_id(fresh, order.id)
+    assert updated is not None
+    assert updated.status == "confirmed"
+    assert "уже нельзя отменить" in client.calls[0]["text"]
+    assert not any(c["method"] == "send_message" and c["chat_id"] == "admin_chat" for c in client.calls)

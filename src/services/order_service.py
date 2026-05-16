@@ -1,10 +1,21 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.crud import order as order_crud
 from src.db.models import Order
 from src.services.cart_service import CartViewDTO
+
+
+@dataclass(frozen=True)
+class OrderCancellationResult:
+    """Результат попытки пользовательской отмены заказа."""
+
+    order: Order | None
+    cancelled: bool
+    reason: str
 
 
 def format_manager_notification(
@@ -34,6 +45,33 @@ async def get_user_orders(session: AsyncSession, user_id: int) -> list[Order]:
     """Получить последние 5 заказов пользователя (сортировка по убыванию id)."""
     orders = await order_crud.get_by_user(session, user_id)
     return orders[:5]
+
+
+async def get_user_order_detail(session: AsyncSession, user_id: int, order_id: int) -> Order | None:
+    """Получить заказ пользователя по ID, не раскрывая чужие заказы."""
+    order = await order_crud.get_by_id(session, order_id)
+    if order is None or order.user_id != user_id:
+        return None
+    return order
+
+
+async def cancel_user_order(session: AsyncSession, user_id: int, order_id: int) -> OrderCancellationResult:
+    """Отменить заказ пользователя, если он ещё ожидает подтверждения."""
+    order = await get_user_order_detail(session, user_id, order_id)
+    if order is None:
+        return OrderCancellationResult(order=None, cancelled=False, reason="not_found")
+    if order.status != "pending":
+        return OrderCancellationResult(order=order, cancelled=False, reason="not_cancelable")
+
+    cancelled_order = await order_crud.update_status(session, order, "cancelled")
+    return OrderCancellationResult(order=cancelled_order, cancelled=True, reason="cancelled")
+
+
+def format_order_cancellation_notification(order_id: int, max_user_id: str, user_name: str | None) -> str:
+    """Сформировать уведомление администратору об отмене заказа пользователем."""
+    display_name = user_name.strip() if user_name else ""
+    user_text = f"{max_user_id} / {display_name}" if display_name else max_user_id
+    return f"⚠️ Пользователь {user_text} отменил заказ №{order_id}"
 
 
 async def create_order_from_cart(

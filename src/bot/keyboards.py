@@ -155,6 +155,43 @@ def order_confirmed_keyboard() -> list[list[dict[str, Any]]]:
     ]
 
 
+def user_orders_keyboard(orders: list[Any]) -> list[list[dict[str, Any]]]:
+    """Клавиатура списка заказов пользователя."""
+    buttons: list[list[dict[str, Any]]] = []
+    for order in orders:
+        buttons.append(
+            [
+                {
+                    "type": "callback",
+                    "text": f"#{order.id} — {_user_order_status_label(order.status)}",
+                    "payload": f"order_details:{order.id}",
+                }
+            ]
+        )
+    buttons.append([{"type": "callback", "text": "🏠 Главная", "payload": "home"}])
+    return buttons
+
+
+def user_order_detail_keyboard(order_id: int, status: str) -> list[list[dict[str, Any]]]:
+    """Клавиатура деталей заказа пользователя."""
+    buttons: list[list[dict[str, Any]]] = []
+    if status == "pending":
+        buttons.append(
+            [{"type": "callback", "text": "❌ Отменить заказ", "payload": f"order_cancel_confirm:{order_id}"}]
+        )
+    buttons.append([{"type": "callback", "text": "🔙 К заказам", "payload": "menu:orders"}])
+    buttons.append([{"type": "callback", "text": "🏠 Главная", "payload": "home"}])
+    return buttons
+
+
+def user_order_cancel_confirm_keyboard(order_id: int) -> list[list[dict[str, Any]]]:
+    """Клавиатура подтверждения отмены пользовательского заказа."""
+    return [
+        [{"type": "callback", "text": "✅ Да", "payload": f"order_cancel_execute:{order_id}"}],
+        [{"type": "callback", "text": "↩️ Нет", "payload": f"order_details:{order_id}"}],
+    ]
+
+
 def contact_keyboard(phone: str = "", vk_link: str = "", max_link: str = "") -> list[list[dict[str, Any]]]:
     """Клавиатура экрана контактов. Ссылки показаны текстом, навигация — callback."""
     return [
@@ -188,6 +225,16 @@ def admin_menu_keyboard() -> list[list[dict[str, Any]]]:
         [{"type": "callback", "text": "📊 Статистика", "payload": "admin:stats"}, {"type": "callback", "text": "📤 Рассылка", "payload": "admin:broadcast"}],
         [{"type": "callback", "text": "🚪 Выход", "payload": "admin:exit"}],
     ]
+
+
+def _user_order_status_label(status: str) -> str:
+    labels = {
+        "pending": "⏳ Ожидает подтверждения",
+        "confirmed": "✅ Подтверждён",
+        "completed": "🏁 Завершён",
+        "cancelled": "❌ Отменён",
+    }
+    return labels.get(status, status)
 
 
 def admin_back_keyboard() -> list[list[dict[str, Any]]]:

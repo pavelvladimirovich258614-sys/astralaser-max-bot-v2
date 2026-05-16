@@ -337,6 +337,30 @@ class UpdateRouter:
             await catalog_handler.add_to_cart(self.client, chat_id, user_id, message_id, product_id)
             return
 
+        if cmd == "order_details" and len(parts) == 2:
+            try:
+                order_id = int(parts[1])
+            except ValueError:
+                return
+            await order_handler.show_order_details(self.client, chat_id, user_id, order_id, message_id)
+            return
+
+        if cmd == "order_cancel_confirm" and len(parts) == 2:
+            try:
+                order_id = int(parts[1])
+            except ValueError:
+                return
+            await order_handler.confirm_order_cancellation(self.client, chat_id, user_id, order_id, message_id)
+            return
+
+        if cmd == "order_cancel_execute" and len(parts) == 2:
+            try:
+                order_id = int(parts[1])
+            except ValueError:
+                return
+            await order_handler.execute_order_cancellation(self.client, chat_id, user_id, order_id, message_id)
+            return
+
         if cmd == "qty" and len(parts) == 3:
             try:
                 product_id = int(parts[1])

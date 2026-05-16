@@ -497,6 +497,48 @@ async def test_router_callback_order_confirm_routes_to_order_handler(router, asy
 
 
 @pytest.mark.asyncio
+async def test_router_callback_order_details_routes_to_order_handler(router, monkeypatch):
+    r, _ = router
+    calls = []
+
+    async def fake_show_order_details(client, chat_id, user_id, order_id, message_id=None):
+        calls.append((chat_id, user_id, order_id, message_id))
+
+    monkeypatch.setattr(order_handler, "show_order_details", fake_show_order_details)
+    await r.process(_make_callback_payload("order_details:42", user_id="804"))
+
+    assert calls == [("456", "804", 42, "msg_1")]
+
+
+@pytest.mark.asyncio
+async def test_router_callback_order_cancel_confirm_routes_to_order_handler(router, monkeypatch):
+    r, _ = router
+    calls = []
+
+    async def fake_confirm_order_cancellation(client, chat_id, user_id, order_id, message_id=None):
+        calls.append((chat_id, user_id, order_id, message_id))
+
+    monkeypatch.setattr(order_handler, "confirm_order_cancellation", fake_confirm_order_cancellation)
+    await r.process(_make_callback_payload("order_cancel_confirm:43", user_id="805"))
+
+    assert calls == [("456", "805", 43, "msg_1")]
+
+
+@pytest.mark.asyncio
+async def test_router_callback_order_cancel_execute_routes_to_order_handler(router, monkeypatch):
+    r, _ = router
+    calls = []
+
+    async def fake_execute_order_cancellation(client, chat_id, user_id, order_id, message_id=None):
+        calls.append((chat_id, user_id, order_id, message_id))
+
+    monkeypatch.setattr(order_handler, "execute_order_cancellation", fake_execute_order_cancellation)
+    await r.process(_make_callback_payload("order_cancel_execute:44", user_id="806"))
+
+    assert calls == [("456", "806", 44, "msg_1")]
+
+
+@pytest.mark.asyncio
 async def test_router_callback_menu_contact(router):
     r, client = router
     await r.process(_make_callback_payload("menu:contact"))

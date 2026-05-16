@@ -2844,3 +2844,34 @@ F05 каталог (категории, карточки, пагинация ф�
 
 **Next best action:** Человек открывает новое `/start` меню в MAX и кликает `📍 Пункты выдачи СДЭК`, чтобы визуально подтвердить client-side открытие внешнего браузера.
 
+## Session Record — 2026-05-17 07:22
+
+**Agent:** Codex
+**Feature:** П15-user-order-cancellation-flow
+**Status:** completed
+
+**What was done:**
+- src/bot/keyboards.py: добавлены клавиатуры пользовательского списка заказов, деталей заказа и подтверждения отмены.
+- src/services/order_service.py: добавлены безопасное получение заказа пользователя, отмена только pending-заказа и формат уведомления администратору.
+- src/bot/handlers/order.py: `Мои заказы` теперь показывает callback-кнопки заказов; добавлены детали заказа, подтверждение отмены и исполнение отмены с проверкой владельца и статуса.
+- src/bot/router.py: подключены callback payload `order_details:<id>`, `order_cancel_confirm:<id>`, `order_cancel_execute:<id>`.
+- tests/test_order.py, tests/test_router.py: добавлены проверки деталей, скрытия кнопки для completed/confirmed, запрета чужой отмены, обновления статуса и уведомления админа.
+- feature_list.json: П15 добавлена и помечена как `completed` по прямому DoD задачи.
+
+**Evidence:**
+- targeted tests: `tests/test_order.py tests/test_router.py` → 112 passed
+- pytest: 330 passed, 582 warnings
+- ruff: exit 0
+- mypy: Success, no issues found in 38 source files
+- init.ps1: === READY ===
+- server init.sh: === READY ===
+- runtime: `systemctl restart astralaser.service` → active
+- runtime: `GET http://127.0.0.1:8080/health` → `{"status":"ok","db":"ok","max_api":"ok","uptime":"22"}`
+- runtime: production grep confirms deployed routes/keyboards contain `order_details`, `order_cancel_confirm`, `order_cancel_execute`, and `❌ Отменить заказ`
+
+**Notes / follow-ups:**
+- Внутреннее значение статуса в БД остаётся системным `cancelled`; пользовательские тексты показывают `❌ Отменён`.
+- Пользовательская отмена разрешена только для `pending`; `confirmed`, `completed` и чужие заказы не отменяются и не отправляют admin notification.
+
+**Next best action:** Человек открывает `📦 Мои заказы` в MAX на аккаунте с pending-заказом и визуально подтверждает путь детали → отмена → подтверждение.
+
